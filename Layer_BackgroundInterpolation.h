@@ -21,8 +21,8 @@
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef _LAYER_BACKGROUND_H_
-#define _LAYER_BACKGROUND_H_
+#ifndef _LAYER_BACKGROUND_INTERPOLATION_H_
+#define _LAYER_BACKGROUND_INTERPOLATION_H_
 
 #include "Layer.h"
 #include "MatrixCommon.h"
@@ -31,10 +31,10 @@
 #define SM_BACKGROUND_OPTIONS_NONE     0
 
 template <typename RGB, unsigned int optionFlags>
-class SMLayerBackground : public SM_Layer {
+class SMLayerBackgroundInterpolation : public SM_Layer {
     public:
-        SMLayerBackground(RGB * buffer, uint16_t width, uint16_t height, color_chan_t * colorCorrectionLUT);
-        SMLayerBackground(uint16_t width, uint16_t height);
+        SMLayerBackgroundInterpolation(RGB * buffer, uint16_t width, uint16_t height, color_chan_t * colorCorrectionLUT);
+        SMLayerBackgroundInterpolation(uint16_t width, uint16_t height);
         void begin(void);
         void frameRefreshCallback();
         void fillRefreshRow(uint16_t hardwareY, rgb48 refreshRow[], int brightnessShifts = 0);
@@ -123,6 +123,6 @@ class SMLayerBackground : public SM_Layer {
         void handleBufferSwap(void);
 };
 
-#include "Layer_Background_Impl.h"
+#include "Layer_BackgroundInterpolation_Impl.h"
 
 #endif

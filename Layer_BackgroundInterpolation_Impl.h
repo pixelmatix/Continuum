@@ -25,7 +25,7 @@
 
 // call when backgroundBuffers and backgroundColorCorrectionLUT buffer is allocated outside of class
 template <typename RGB, unsigned int optionFlags>
-SMLayerBackground<RGB, optionFlags>::SMLayerBackground(RGB * buffer, uint16_t width, uint16_t height, color_chan_t * colorCorrectionLUT) {
+SMLayerBackgroundInterpolation<RGB, optionFlags>::SMLayerBackgroundInterpolation(RGB * buffer, uint16_t width, uint16_t height, color_chan_t * colorCorrectionLUT) {
     backgroundBuffers[0] = buffer;
     backgroundBuffers[1] = buffer + (width * height);
     backgroundColorCorrectionLUT = colorCorrectionLUT;
@@ -35,13 +35,13 @@ SMLayerBackground<RGB, optionFlags>::SMLayerBackground(RGB * buffer, uint16_t wi
 
 // call this when buffers should be sourced from malloc inside begin()
 template <typename RGB, unsigned int optionFlags>
-SMLayerBackground<RGB, optionFlags>::SMLayerBackground(uint16_t width, uint16_t height) {
+SMLayerBackgroundInterpolation<RGB, optionFlags>::SMLayerBackgroundInterpolation(uint16_t width, uint16_t height) {
     this->matrixWidth = width;
     this->matrixHeight = height;
 }
 
 template <typename RGB, unsigned int optionFlags>
-void SMLayerBackground<RGB, optionFlags>::begin(void) {
+void SMLayerBackgroundInterpolation<RGB, optionFlags>::begin(void) {
 #if defined(ESP32)
 #ifdef BOARD_HAS_PSRAM
 #define ESPmalloc ps_malloc
@@ -77,7 +77,7 @@ void SMLayerBackground<RGB, optionFlags>::begin(void) {
 }
 
 template <typename RGB, unsigned int optionFlags>
-void SMLayerBackground<RGB, optionFlags>::frameRefreshCallback(void) {
+void SMLayerBackgroundInterpolation<RGB, optionFlags>::frameRefreshCallback(void) {
     handleBufferSwap();
 
     if(sizeof(RGB) > 3)
@@ -87,23 +87,23 @@ void SMLayerBackground<RGB, optionFlags>::frameRefreshCallback(void) {
 }
 
 template <typename RGB, unsigned int optionFlags>
-int SMLayerBackground<RGB, optionFlags>::getRequestedBrightnessShifts() {
+int SMLayerBackgroundInterpolation<RGB, optionFlags>::getRequestedBrightnessShifts() {
     return idealBrightnessShifts;
 }
 
 template <typename RGB, unsigned int optionFlags>
-bool SMLayerBackground<RGB, optionFlags>::isLayerChanged() {
+bool SMLayerBackgroundInterpolation<RGB, optionFlags>::isLayerChanged() {
     return swapPending;
 }
 
 // numShifts must be in range of 0-4, otherwise 16-bit to 12-bit conversion code breaks (would be an easy fix, but 4 is enough for APA102 GBC application)
 template <typename RGB, unsigned int optionFlags>
-void SMLayerBackground<RGB, optionFlags>::setBrightnessShifts(int numShifts) {
+void SMLayerBackgroundInterpolation<RGB, optionFlags>::setBrightnessShifts(int numShifts) {
     pendingIdealBrightnessShifts = numShifts;
 }
 
 template <typename RGB, unsigned int optionFlags>
-void SMLayerBackground<RGB, optionFlags>::fillRefreshRow(uint16_t hardwareY, rgb48 refreshRow[], int brightnessShifts) {
+void SMLayerBackgroundInterpolation<RGB, optionFlags>::fillRefreshRow(uint16_t hardwareY, rgb48 refreshRow[], int brightnessShifts) {
     RGB currentPixel;
     int i;
 
@@ -143,7 +143,7 @@ void SMLayerBackground<RGB, optionFlags>::fillRefreshRow(uint16_t hardwareY, rgb
 }
 
 template <typename RGB, unsigned int optionFlags>
-void SMLayerBackground<RGB, optionFlags>::fillRefreshRow(uint16_t hardwareY, rgb24 refreshRow[], int brightnessShifts) {
+void SMLayerBackgroundInterpolation<RGB, optionFlags>::fillRefreshRow(uint16_t hardwareY, rgb24 refreshRow[], int brightnessShifts) {
     RGB currentPixel;
     int i;
 
@@ -186,18 +186,18 @@ extern volatile int framesInterpolated;
 #define INLINE __attribute__( ( always_inline ) ) inline
 
 template <typename RGB, unsigned int optionFlags>
-INLINE void SMLayerBackground<RGB, optionFlags>::loadPixelToDrawBuffer(int16_t hwx, int16_t hwy, const RGB& color) {
+INLINE void SMLayerBackgroundInterpolation<RGB, optionFlags>::loadPixelToDrawBuffer(int16_t hwx, int16_t hwy, const RGB& color) {
     currentDrawBufferPtr[(hwy * this->matrixWidth) + hwx] = color;
 }
 
 template <typename RGB, unsigned int optionFlags>
-INLINE const RGB SMLayerBackground<RGB, optionFlags>::readPixelFromDrawBuffer(int16_t hwx, int16_t hwy) {
+INLINE const RGB SMLayerBackgroundInterpolation<RGB, optionFlags>::readPixelFromDrawBuffer(int16_t hwx, int16_t hwy) {
     RGB pixel = currentDrawBufferPtr[(hwy * this->matrixWidth) + hwx];
     return pixel;
 }
 
 template <typename RGB, unsigned int optionFlags>
-void SMLayerBackground<RGB, optionFlags>::drawPixel(int16_t x, int16_t y, const RGB& color) {
+void SMLayerBackgroundInterpolation<RGB, optionFlags>::drawPixel(int16_t x, int16_t y, const RGB& color) {
     int hwx, hwy;
 
     // check for out of bounds coordinates
@@ -230,7 +230,7 @@ void SMLayerBackground<RGB, optionFlags>::drawPixel(int16_t x, int16_t y, const 
 
 // x0, x1, and y must be in bounds (0-this->localWidth/Height-1), x1 > x0
 template <typename RGB, unsigned int optionFlags>
-void SMLayerBackground<RGB, optionFlags>::drawHardwareHLine(uint16_t x0, uint16_t x1, uint16_t y, const RGB& color) {
+void SMLayerBackgroundInterpolation<RGB, optionFlags>::drawHardwareHLine(uint16_t x0, uint16_t x1, uint16_t y, const RGB& color) {
     int i;
 
     for (i = x0; i <= x1; i++) {
@@ -240,7 +240,7 @@ void SMLayerBackground<RGB, optionFlags>::drawHardwareHLine(uint16_t x0, uint16_
 
 // x, y0, and y1 must be in bounds (0-this->localWidth/Height-1), y1 > y0
 template <typename RGB, unsigned int optionFlags>
-void SMLayerBackground<RGB, optionFlags>::drawHardwareVLine(uint16_t x, uint16_t y0, uint16_t y1, const RGB& color) {
+void SMLayerBackgroundInterpolation<RGB, optionFlags>::drawHardwareVLine(uint16_t x, uint16_t y0, uint16_t y1, const RGB& color) {
     int i;
 
     for (i = y0; i <= y1; i++) {
@@ -249,7 +249,7 @@ void SMLayerBackground<RGB, optionFlags>::drawHardwareVLine(uint16_t x, uint16_t
 }
 
 template <typename RGB, unsigned int optionFlags>
-void SMLayerBackground<RGB, optionFlags>::drawFastHLine(int16_t x0, int16_t x1, int16_t y, const RGB& color) {
+void SMLayerBackgroundInterpolation<RGB, optionFlags>::drawFastHLine(int16_t x0, int16_t x1, int16_t y, const RGB& color) {
     // make sure line goes from x0 to x1
     if (x1 < x0)
         SWAPint(x1, x0);
@@ -278,7 +278,7 @@ void SMLayerBackground<RGB, optionFlags>::drawFastHLine(int16_t x0, int16_t x1, 
 }
 
 template <typename RGB, unsigned int optionFlags>
-void SMLayerBackground<RGB, optionFlags>::drawFastVLine(int16_t x, int16_t y0, int16_t y1, const RGB& color) {
+void SMLayerBackgroundInterpolation<RGB, optionFlags>::drawFastVLine(int16_t x, int16_t y0, int16_t y1, const RGB& color) {
     // make sure line goes from y0 to y1
     if (y1 < y0)
         SWAPint(y1, y0);
@@ -307,7 +307,7 @@ void SMLayerBackground<RGB, optionFlags>::drawFastVLine(int16_t x, int16_t y0, i
 }
 
 template <typename RGB, unsigned int optionFlags>
-void SMLayerBackground<RGB, optionFlags>::bresteepline(int16_t x3, int16_t y3, int16_t x4, int16_t y4, const RGB& color) {
+void SMLayerBackgroundInterpolation<RGB, optionFlags>::bresteepline(int16_t x3, int16_t y3, int16_t x4, int16_t y4, const RGB& color) {
     // if point x3, y3 is on the right side of point x4, y4, change them
     if ((x3 - x4) > 0) {
         bresteepline(x4, y4, x3, y3, color);
@@ -330,7 +330,7 @@ void SMLayerBackground<RGB, optionFlags>::bresteepline(int16_t x3, int16_t y3, i
 
 // algorithm from http://www.netgraphics.sk/bresenham-algorithm-for-a-line
 template <typename RGB, unsigned int optionFlags>
-void SMLayerBackground<RGB, optionFlags>::drawLine(int16_t x1, int16_t y1, int16_t x2, int16_t y2, const RGB& color) {
+void SMLayerBackgroundInterpolation<RGB, optionFlags>::drawLine(int16_t x1, int16_t y1, int16_t x2, int16_t y2, const RGB& color) {
     // if point x1, y1 is on the right side of point x2, y2, change them
     if ((x1 - x2) > 0) {
         drawLine(x2, y2, x1, y1, color);
@@ -361,7 +361,7 @@ void SMLayerBackground<RGB, optionFlags>::drawLine(int16_t x1, int16_t y1, int16
 
 // algorithm from http://en.wikipedia.org/wiki/Midpoint_circle_algorithm
 template <typename RGB, unsigned int optionFlags>
-void SMLayerBackground<RGB, optionFlags>::drawCircle(int16_t x0, int16_t y0, uint16_t radius, const RGB& color)
+void SMLayerBackgroundInterpolation<RGB, optionFlags>::drawCircle(int16_t x0, int16_t y0, uint16_t radius, const RGB& color)
 {
     int a = radius, b = 0;
     int radiusError = 1 - a;
@@ -395,7 +395,7 @@ void SMLayerBackground<RGB, optionFlags>::drawCircle(int16_t x0, int16_t y0, uin
 
 // algorithm from drawCircle rearranged with hlines drawn between points on the radius
 template <typename RGB, unsigned int optionFlags>
-void SMLayerBackground<RGB, optionFlags>::fillCircle(int16_t x0, int16_t y0, uint16_t radius, const RGB& outlineColor, const RGB& fillColor)
+void SMLayerBackgroundInterpolation<RGB, optionFlags>::fillCircle(int16_t x0, int16_t y0, uint16_t radius, const RGB& outlineColor, const RGB& fillColor)
 {
     int a = radius, b = 0;
     int radiusError = 1 - a;
@@ -445,7 +445,7 @@ void SMLayerBackground<RGB, optionFlags>::fillCircle(int16_t x0, int16_t y0, uin
 
 // algorithm from drawCircle rearranged with hlines drawn between points on the raidus
 template <typename RGB, unsigned int optionFlags>
-void SMLayerBackground<RGB, optionFlags>::fillCircle(int16_t x0, int16_t y0, uint16_t radius, const RGB& fillColor)
+void SMLayerBackgroundInterpolation<RGB, optionFlags>::fillCircle(int16_t x0, int16_t y0, uint16_t radius, const RGB& fillColor)
 {
     int a = radius, b = 0;
     int radiusError = 1 - a;
@@ -483,7 +483,7 @@ void SMLayerBackground<RGB, optionFlags>::fillCircle(int16_t x0, int16_t y0, uin
 
 // from https://web.archive.org/web/20120225095359/http://homepage.smc.edu/kennedy_john/belipse.pdf
 template <typename RGB, unsigned int optionFlags>
-void SMLayerBackground<RGB, optionFlags>::drawEllipse(int16_t x0, int16_t y0, uint16_t radiusX, uint16_t radiusY, const RGB& color) {
+void SMLayerBackgroundInterpolation<RGB, optionFlags>::drawEllipse(int16_t x0, int16_t y0, uint16_t radiusX, uint16_t radiusY, const RGB& color) {
     int16_t twoASquare = 2 * radiusX * radiusX;
     int16_t twoBSquare = 2 * radiusY * radiusY;
     
@@ -545,13 +545,13 @@ void SMLayerBackground<RGB, optionFlags>::drawEllipse(int16_t x0, int16_t y0, ui
 }
 
 template <typename RGB, unsigned int optionFlags>
-void SMLayerBackground<RGB, optionFlags>::fillRoundRectangle(int16_t x0, int16_t y0, int16_t x1, int16_t y1,
+void SMLayerBackgroundInterpolation<RGB, optionFlags>::fillRoundRectangle(int16_t x0, int16_t y0, int16_t x1, int16_t y1,
   uint16_t radius, const RGB& fillColor) {
     fillRoundRectangle(x0, y0, x1, y1, radius, fillColor, fillColor);
 }
 
 template <typename RGB, unsigned int optionFlags>
-void SMLayerBackground<RGB, optionFlags>::fillRoundRectangle(int16_t x0, int16_t y0, int16_t x1, int16_t y1,
+void SMLayerBackgroundInterpolation<RGB, optionFlags>::fillRoundRectangle(int16_t x0, int16_t y0, int16_t x1, int16_t y1,
   uint16_t radius, const RGB& outlineColor, const RGB& fillColor) {
     if (x1 < x0)
         SWAPint(x1, x0);
@@ -634,7 +634,7 @@ void SMLayerBackground<RGB, optionFlags>::fillRoundRectangle(int16_t x0, int16_t
 }
 
 template <typename RGB, unsigned int optionFlags>
-void SMLayerBackground<RGB, optionFlags>::drawRoundRectangle(int16_t x0, int16_t y0, int16_t x1, int16_t y1,
+void SMLayerBackgroundInterpolation<RGB, optionFlags>::drawRoundRectangle(int16_t x0, int16_t y0, int16_t x1, int16_t y1,
   uint16_t radius, const RGB& outlineColor) {
     if (x1 < x0)
         SWAPint(x1, x0);
@@ -693,7 +693,7 @@ void SMLayerBackground<RGB, optionFlags>::drawRoundRectangle(int16_t x0, int16_t
 
 // Code from http://www.sunshine2k.de/coding/java/TriangleRasterization/TriangleRasterization.html
 template <typename RGB, unsigned int optionFlags>
-void SMLayerBackground<RGB, optionFlags>::fillFlatSideTriangleInt(int16_t x1, int16_t y1, int16_t x2, int16_t y2,
+void SMLayerBackgroundInterpolation<RGB, optionFlags>::fillFlatSideTriangleInt(int16_t x1, int16_t y1, int16_t x2, int16_t y2,
   int16_t x3, int16_t y3, const RGB& color) {
     int16_t t1x, t2x, t1y, t2y;
     bool changed1 = false;
@@ -781,7 +781,7 @@ void SMLayerBackground<RGB, optionFlags>::fillFlatSideTriangleInt(int16_t x1, in
 
 // Code from http://www.sunshine2k.de/coding/java/TriangleRasterization/TriangleRasterization.html
 template <typename RGB, unsigned int optionFlags>
-void SMLayerBackground<RGB, optionFlags>::fillTriangle(int16_t x1, int16_t y1, int16_t x2, int16_t y2, int16_t x3, int16_t y3, const RGB& fillColor) {
+void SMLayerBackgroundInterpolation<RGB, optionFlags>::fillTriangle(int16_t x1, int16_t y1, int16_t x2, int16_t y2, int16_t x3, int16_t y3, const RGB& fillColor) {
     // Sort vertices
     if (y1 > y2) {
         SWAPint(y1, y2);
@@ -817,21 +817,21 @@ void SMLayerBackground<RGB, optionFlags>::fillTriangle(int16_t x1, int16_t y1, i
 }
 
 template <typename RGB, unsigned int optionFlags>
-void SMLayerBackground<RGB, optionFlags>::fillTriangle(int16_t x1, int16_t y1, int16_t x2, int16_t y2, int16_t x3, int16_t y3,
+void SMLayerBackgroundInterpolation<RGB, optionFlags>::fillTriangle(int16_t x1, int16_t y1, int16_t x2, int16_t y2, int16_t x3, int16_t y3,
   const RGB& outlineColor, const RGB& fillColor) {
     fillTriangle(x1, y1, x2, y2, x3, y3, fillColor);
     drawTriangle(x1, y1, x2, y2, x3, y3, outlineColor);
 }
 
 template <typename RGB, unsigned int optionFlags>
-void SMLayerBackground<RGB, optionFlags>::drawTriangle(int16_t x1, int16_t y1, int16_t x2, int16_t y2, int16_t x3, int16_t y3, const RGB& color) {
+void SMLayerBackgroundInterpolation<RGB, optionFlags>::drawTriangle(int16_t x1, int16_t y1, int16_t x2, int16_t y2, int16_t x3, int16_t y3, const RGB& color) {
     drawLine(x1, y1, x2, y2, color);
     drawLine(x2, y2, x3, y3, color);
     drawLine(x1, y1, x3, y3, color);
 }
 
 template <typename RGB, unsigned int optionFlags>
-void SMLayerBackground<RGB, optionFlags>::drawRectangle(int16_t x0, int16_t y0, int16_t x1, int16_t y1, const RGB& color) {
+void SMLayerBackgroundInterpolation<RGB, optionFlags>::drawRectangle(int16_t x0, int16_t y0, int16_t x1, int16_t y1, const RGB& color) {
     drawFastHLine(x0, x1, y0, color);
     drawFastHLine(x0, x1, y1, color);
     drawFastVLine(x0, y0, y1, color);
@@ -839,7 +839,7 @@ void SMLayerBackground<RGB, optionFlags>::drawRectangle(int16_t x0, int16_t y0, 
 }
 
 template <typename RGB, unsigned int optionFlags>
-void SMLayerBackground<RGB, optionFlags>::fillRectangle(int16_t x0, int16_t y0, int16_t x1, int16_t y1, const RGB& color) {
+void SMLayerBackgroundInterpolation<RGB, optionFlags>::fillRectangle(int16_t x0, int16_t y0, int16_t x1, int16_t y1, const RGB& color) {
     int i;
 // Loop only works if y1 > y0
     if (y0 > y1) {
@@ -856,18 +856,18 @@ void SMLayerBackground<RGB, optionFlags>::fillRectangle(int16_t x0, int16_t y0, 
 }
 
 template <typename RGB, unsigned int optionFlags>
-void SMLayerBackground<RGB, optionFlags>::fillScreen(const RGB& color) {
+void SMLayerBackgroundInterpolation<RGB, optionFlags>::fillScreen(const RGB& color) {
     fillRectangle(0, 0, this->localWidth - 1, this->localHeight - 1, color);
 }
 
 template <typename RGB, unsigned int optionFlags>
-void SMLayerBackground<RGB, optionFlags>::fillRectangle(int16_t x0, int16_t y0, int16_t x1, int16_t y1, const RGB& outlineColor, const RGB& fillColor) {
+void SMLayerBackgroundInterpolation<RGB, optionFlags>::fillRectangle(int16_t x0, int16_t y0, int16_t x1, int16_t y1, const RGB& outlineColor, const RGB& fillColor) {
     fillRectangle(x0, y0, x1, y1, fillColor);
     drawRectangle(x0, y0, x1, y1, outlineColor);
 }
 
 template <typename RGB, unsigned int optionFlags>
-bool SMLayerBackground<RGB, optionFlags>::getBitmapPixelAtXY(uint8_t x, uint8_t y, uint8_t width, uint8_t height, const uint8_t *bitmap) {
+bool SMLayerBackgroundInterpolation<RGB, optionFlags>::getBitmapPixelAtXY(uint8_t x, uint8_t y, uint8_t width, uint8_t height, const uint8_t *bitmap) {
     int cell = (y * ((width / 8) + 1)) + (x / 8);
 
     uint8_t mask = 0x80 >> (x % 8);
@@ -875,12 +875,12 @@ bool SMLayerBackground<RGB, optionFlags>::getBitmapPixelAtXY(uint8_t x, uint8_t 
 }
 
 template <typename RGB, unsigned int optionFlags>
-void SMLayerBackground<RGB, optionFlags>::setFont(fontChoices newFont) {
+void SMLayerBackgroundInterpolation<RGB, optionFlags>::setFont(fontChoices newFont) {
     font = (bitmap_font *)fontLookup(newFont);
 }
 
 template <typename RGB, unsigned int optionFlags>
-void SMLayerBackground<RGB, optionFlags>::drawChar(int16_t x, int16_t y, const RGB& charColor, char character) {
+void SMLayerBackgroundInterpolation<RGB, optionFlags>::drawChar(int16_t x, int16_t y, const RGB& charColor, char character) {
     int xcnt, ycnt;
 
     for (ycnt = 0; ycnt < font->Height; ycnt++) {
@@ -893,7 +893,7 @@ void SMLayerBackground<RGB, optionFlags>::drawChar(int16_t x, int16_t y, const R
 }
 
 template <typename RGB, unsigned int optionFlags>
-void SMLayerBackground<RGB, optionFlags>::drawString(int16_t x, int16_t y, const RGB& charColor, const char text[]) {
+void SMLayerBackgroundInterpolation<RGB, optionFlags>::drawString(int16_t x, int16_t y, const RGB& charColor, const char text[]) {
     int xcnt, ycnt, offset = 0;
     char character;
 
@@ -911,7 +911,7 @@ void SMLayerBackground<RGB, optionFlags>::drawString(int16_t x, int16_t y, const
 
 // draw string while clearing background
 template <typename RGB, unsigned int optionFlags>
-void SMLayerBackground<RGB, optionFlags>::drawString(int16_t x, int16_t y, const RGB& charColor, const RGB& backColor, const char text[]) {
+void SMLayerBackgroundInterpolation<RGB, optionFlags>::drawString(int16_t x, int16_t y, const RGB& charColor, const RGB& backColor, const char text[]) {
     int xcnt, ycnt, offset = 0;
     char character;
 
@@ -930,7 +930,7 @@ void SMLayerBackground<RGB, optionFlags>::drawString(int16_t x, int16_t y, const
 }
 
 template <typename RGB, unsigned int optionFlags>
-void SMLayerBackground<RGB, optionFlags>::drawMonoBitmap(int16_t x, int16_t y, uint8_t width, uint8_t height,
+void SMLayerBackgroundInterpolation<RGB, optionFlags>::drawMonoBitmap(int16_t x, int16_t y, uint8_t width, uint8_t height,
   const RGB& bitmapColor, const uint8_t *bitmap) {
     int xcnt, ycnt;
 
@@ -944,12 +944,12 @@ void SMLayerBackground<RGB, optionFlags>::drawMonoBitmap(int16_t x, int16_t y, u
 }
 
 template <typename RGB, unsigned int optionFlags>
-bool SMLayerBackground<RGB, optionFlags>::isSwapPending(void) {
+bool SMLayerBackgroundInterpolation<RGB, optionFlags>::isSwapPending(void) {
     return swapPending;
 }
 
 template <typename RGB, unsigned int optionFlags>
-void SMLayerBackground<RGB, optionFlags>::handleBufferSwap(void) {
+void SMLayerBackgroundInterpolation<RGB, optionFlags>::handleBufferSwap(void) {
     if (!swapPending)
         return;
 
@@ -967,7 +967,7 @@ void SMLayerBackground<RGB, optionFlags>::handleBufferSwap(void) {
 // waits until previous swap is complete
 // waits until current swap is complete if copy is enabled
 template <typename RGB, unsigned int optionFlags>
-void SMLayerBackground<RGB, optionFlags>::swapBuffers(bool copy) {
+void SMLayerBackgroundInterpolation<RGB, optionFlags>::swapBuffers(bool copy) {
     while (swapPending);
 
     swapPending = true;
@@ -995,34 +995,34 @@ void SMLayerBackground<RGB, optionFlags>::swapBuffers(bool copy) {
 }
 
 template <typename RGB, unsigned int optionFlags>
-void SMLayerBackground<RGB, optionFlags>::copyRefreshToDrawing() {
+void SMLayerBackgroundInterpolation<RGB, optionFlags>::copyRefreshToDrawing() {
     memcpy(currentDrawBufferPtr, currentRefreshBufferPtr, sizeof(RGB) * (this->matrixWidth * this->matrixHeight));
 }
 
 // return pointer to start of currentDrawBuffer, so application can do efficient loading of bitmaps
 template <typename RGB, unsigned int optionFlags>
-RGB *SMLayerBackground<RGB, optionFlags>::backBuffer(void) {
+RGB *SMLayerBackgroundInterpolation<RGB, optionFlags>::backBuffer(void) {
     return currentDrawBufferPtr;
 }
 
 template<typename RGB, unsigned int optionFlags>
-void SMLayerBackground<RGB, optionFlags>::setBackBuffer(RGB *newBuffer) {
+void SMLayerBackgroundInterpolation<RGB, optionFlags>::setBackBuffer(RGB *newBuffer) {
   currentDrawBufferPtr = newBuffer;
 }
 
 template<typename RGB, unsigned int optionFlags>
-void SMLayerBackground<RGB, optionFlags>::setBrightness(uint8_t brightness) {
+void SMLayerBackgroundInterpolation<RGB, optionFlags>::setBrightness(uint8_t brightness) {
     backgroundBrightness = brightness;
 }
 
 template<typename RGB, unsigned int optionFlags>
-void SMLayerBackground<RGB, optionFlags>::enableColorCorrection(bool enabled) {
+void SMLayerBackgroundInterpolation<RGB, optionFlags>::enableColorCorrection(bool enabled) {
     this->ccEnabled = enabled;
 }
 
 // reads pixel from drawing buffer, not refresh buffer
 template<typename RGB, unsigned int optionFlags>
-const RGB SMLayerBackground<RGB, optionFlags>::readPixel(int16_t x, int16_t y) {
+const RGB SMLayerBackgroundInterpolation<RGB, optionFlags>::readPixel(int16_t x, int16_t y) {
     int hwx, hwy;
 
     // check for out of bounds coordinates
@@ -1048,12 +1048,12 @@ const RGB SMLayerBackground<RGB, optionFlags>::readPixel(int16_t x, int16_t y) {
 }
 
 template<typename RGB, unsigned int optionFlags>
-RGB *SMLayerBackground<RGB, optionFlags>::getRealBackBuffer() {
+RGB *SMLayerBackgroundInterpolation<RGB, optionFlags>::getRealBackBuffer() {
   return backgroundBuffers[currentDrawBuffer];
 }
 
 template<typename RGB, unsigned int optionFlags>
-RGB *SMLayerBackground<RGB, optionFlags>::getCurrentRefreshRow(uint16_t y) {
+RGB *SMLayerBackgroundInterpolation<RGB, optionFlags>::getCurrentRefreshRow(uint16_t y) {
   return &currentRefreshBufferPtr[y*this->matrixWidth];
 }
 
