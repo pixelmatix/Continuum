@@ -27,7 +27,10 @@
 template <typename RGB, unsigned int optionFlags>
 SMLayerBackgroundInterpolation<RGB, optionFlags>::SMLayerBackgroundInterpolation(RGB * buffer, uint16_t width, uint16_t height, color_chan_t * colorCorrectionLUT) {
     backgroundBuffers[0] = buffer;
-    backgroundBuffers[1] = buffer + (width * height);
+    backgroundBuffers[1] = buffer + (width * height)*1;
+#if (BACKGROUND_LAYER_INTERPOLATION_NUM_BUFFERS >= 3)
+    backgroundBuffers[2] = buffer + (width * height)*2;
+#endif
     backgroundColorCorrectionLUT = colorCorrectionLUT;
     this->matrixWidth = width;
     this->matrixHeight = height;
@@ -48,7 +51,8 @@ void SMLayerBackgroundInterpolation<RGB, optionFlags>::begin(void) {
 #else
 #define ESPmalloc malloc
 #endif
-    if(!backgroundBuffers[0] && !backgroundBuffers[1]) {
+    // NOTE this is untested with 3x buffers
+    if(!backgroundBuffers[0] && !backgroundBuffers[1] && !backgroundBuffers[2]) {
         //printf("largest free block %d: \r\n", heap_caps_get_largest_free_block(MALLOC_CAP_DMA));
         backgroundBuffers[0] = (RGB *)ESPmalloc(sizeof(RGB) * this->matrixWidth * this->matrixHeight);
         assert(backgroundBuffers[0] != NULL);
@@ -56,8 +60,16 @@ void SMLayerBackgroundInterpolation<RGB, optionFlags>::begin(void) {
         backgroundBuffers[1] = (RGB *)ESPmalloc(sizeof(RGB) * this->matrixWidth * this->matrixHeight);
         assert(backgroundBuffers[1] != NULL);
         //printf("largest free block %d: \r\n", heap_caps_get_largest_free_block(MALLOC_CAP_DMA));
+#if (BACKGROUND_LAYER_INTERPOLATION_NUM_BUFFERS >= 3)
+        backgroundBuffers[2] = (RGB *)ESPmalloc(sizeof(RGB) * this->matrixWidth * this->matrixHeight);
+        assert(backgroundBuffers[2] != NULL);
+        //printf("largest free block %d: \r\n", heap_caps_get_largest_free_block(MALLOC_CAP_DMA));
+#endif
         memset(backgroundBuffers[0], 0x00, sizeof(RGB) * this->matrixWidth * this->matrixHeight);
         memset(backgroundBuffers[1], 0x00, sizeof(RGB) * this->matrixWidth * this->matrixHeight);
+#if (BACKGROUND_LAYER_INTERPOLATION_NUM_BUFFERS >= 3)
+        memset(backgroundBuffers[2], 0x00, sizeof(RGB) * this->matrixWidth * this->matrixHeight);
+#endif
         //printf("largest free block %d: \r\n", heap_caps_get_largest_free_block(MALLOC_CAP_DMA));
     }
     if(!backgroundColorCorrectionLUT) {
@@ -67,13 +79,22 @@ void SMLayerBackgroundInterpolation<RGB, optionFlags>::begin(void) {
     }
 #endif
     
-    currentDrawBuffer = 0;
-    currentRefreshBuffer = 1;
+    // Circular Buffer bufferPool usage:
+    // write to get a buffer for drawing
+    // manually pass that buffer reference off for refreshing
+    // read to return a buffer to the pool when done refreshing
+    cbInit(&bufferPool, BACKGROUND_LAYER_INTERPOLATION_NUM_BUFFERS);
+
+    // we have to start out with two writes, to get the first refresh buffer
+    currentRefreshBuffer = cbGetNextWrite(&bufferPool);
+    cbWrite(&bufferPool);
+    currentDrawBuffer = cbGetNextWrite(&bufferPool);
+    cbWrite(&bufferPool);
     swapPending = false;
     font = (bitmap_font *) &apple3x5;
 
-    currentDrawBufferPtr = backgroundBuffers[0];
-    currentRefreshBufferPtr = backgroundBuffers[1];
+    currentDrawBufferPtr = backgroundBuffers[currentDrawBuffer];
+    currentRefreshBufferPtr = backgroundBuffers[currentRefreshBuffer];
 }
 
 template <typename RGB, unsigned int optionFlags>
@@ -953,10 +974,12 @@ void SMLayerBackgroundInterpolation<RGB, optionFlags>::handleBufferSwap(void) {
     if (!swapPending)
         return;
 
-    unsigned char newDrawBuffer = currentRefreshBuffer;
+    // done with the refresh buffer, return it to the pool
+    cbRead(&bufferPool);
 
     currentRefreshBuffer = currentDrawBuffer;
-    currentDrawBuffer = newDrawBuffer;
+    currentDrawBuffer = cbGetNextWrite(&bufferPool);
+    cbWrite(&bufferPool);
 
     currentRefreshBufferPtr = backgroundBuffers[currentRefreshBuffer];
     currentDrawBufferPtr = backgroundBuffers[currentDrawBuffer];
@@ -975,11 +998,13 @@ void SMLayerBackgroundInterpolation<RGB, optionFlags>::swapBuffers(bool copy) {
     if (copy) {
         while (swapPending);
 #if 1
-        // workaround for bizarre (optimization) bug - currentDrawBuffer and currentRefreshBuffer are volatile and are changed by an ISR while we're waiting for swapPending here.  They can't be used as parameters to memcpy directly though.  
-        if(currentDrawBuffer)
-            memcpy(backgroundBuffers[1], backgroundBuffers[0], sizeof(RGB) * (this->matrixWidth * this->matrixHeight));
-        else
-            memcpy(backgroundBuffers[0], backgroundBuffers[1], sizeof(RGB) * (this->matrixWidth * this->matrixHeight));
+        // workaround for bizarre (ESP32 optimization) bug - currentDrawBuffer and currentRefreshBuffer are volatile and are changed by an ISR while we're waiting for swapPending here.  They can't be used as parameters to memcpy directly though.  currentRefreshBuffer is always (currentDrawBuffer-1)%BACKGROUND_LAYER_INTERPOLATION_NUM_BUFFERS
+        if(currentDrawBuffer == 1)
+            memcpy(backgroundBuffers[1], backgroundBuffers[(1-1)%BACKGROUND_LAYER_INTERPOLATION_NUM_BUFFERS], sizeof(RGB) * (this->matrixWidth * this->matrixHeight));
+        else if (currentDrawBuffer == 2)
+            memcpy(backgroundBuffers[2], backgroundBuffers[(2-1)%BACKGROUND_LAYER_INTERPOLATION_NUM_BUFFERS], sizeof(RGB) * (this->matrixWidth * this->matrixHeight));
+        else // currentDrawBuffer == 0
+            memcpy(backgroundBuffers[0], backgroundBuffers[(0-1)%BACKGROUND_LAYER_INTERPOLATION_NUM_BUFFERS], sizeof(RGB) * (this->matrixWidth * this->matrixHeight));
 #else
         // Similar code also drawing from volatile variables doesn't work if optimization is turned on: currentDrawBuffer will be equal to currentRefreshBuffer and cause a crash from memcpy copying a buffer to itself.  Why?
         memcpy(backgroundBuffers[currentDrawBuffer], backgroundBuffers[currentRefreshBuffer], sizeof(RGB) * (this->matrixWidth * this->matrixHeight));

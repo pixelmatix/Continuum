@@ -106,11 +106,14 @@ const uint8_t kScrollingLayerOptions = (SM_SCROLLING_OPTIONS_NONE);
 
 SMARTMATRIX_ALLOCATE_BUFFERS(matrix, kMatrixWidth, kMatrixHeight, kRefreshDepth, kDmaBufferRows, kPanelType, kMatrixOptions);
 
-//SMARTMATRIX_ALLOCATE_BACKGROUND_LAYER(backgroundLayer, kMatrixWidth, kMatrixHeight, COLOR_DEPTH, kBackgroundLayerOptions);
+#if 0
+SMARTMATRIX_ALLOCATE_BACKGROUND_LAYER(backgroundLayer, kMatrixWidth, kMatrixHeight, COLOR_DEPTH, kBackgroundLayerOptions);
+#else
 typedef RGB_TYPE(COLOR_DEPTH) SM_RGB;
-static SM_RGB backgroundLayerBitmap[2*kMatrixWidth*kMatrixHeight];
+static SM_RGB backgroundLayerBitmap[BACKGROUND_LAYER_INTERPOLATION_NUM_BUFFERS*kMatrixWidth*kMatrixHeight];
 static color_chan_t backgroundLayercolorCorrectionLUT[sizeof(SM_RGB) <= 3 ? 256 : 4096];
 static SMLayerBackgroundInterpolation<SM_RGB, kBackgroundLayerOptions> backgroundLayer(backgroundLayerBitmap, kMatrixWidth, kMatrixHeight, backgroundLayercolorCorrectionLUT);
+#endif
 
 #if (ENABLE_SCROLLING == 1)
 SMARTMATRIX_ALLOCATE_SCROLLING_LAYER(scrollingLayer, kMatrixWidth, kMatrixHeight, COLOR_DEPTH, kScrollingLayerOptions);

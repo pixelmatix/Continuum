@@ -30,6 +30,8 @@
 
 #define SM_BACKGROUND_OPTIONS_NONE     0
 
+#define BACKGROUND_LAYER_INTERPOLATION_NUM_BUFFERS   3
+
 template <typename RGB, unsigned int optionFlags>
 class SMLayerBackgroundInterpolation : public SM_Layer {
     public:
@@ -90,7 +92,7 @@ class SMLayerBackgroundInterpolation : public SM_Layer {
         RGB *currentDrawBufferPtr;
         RGB *currentRefreshBufferPtr;
 
-        RGB *backgroundBuffers[2];
+        RGB *backgroundBuffers[BACKGROUND_LAYER_INTERPOLATION_NUM_BUFFERS];
 
         RGB *getCurrentRefreshRow(uint16_t y);
 
@@ -121,6 +123,7 @@ class SMLayerBackgroundInterpolation : public SM_Layer {
         volatile unsigned char currentRefreshBuffer;
         volatile bool swapPending;
         void handleBufferSwap(void);
+        CircularBuffer_SM bufferPool;
 };
 
 #include "Layer_BackgroundInterpolation_Impl.h"
