@@ -74,6 +74,7 @@
 
 #include <SmartLEDShieldV4.h>  // comment out this line for if you're not using SmartLED Shield V4 hardware (this line needs to be before #include <SmartMatrix3.h>)
 #include <SmartMatrix3.h>
+#include "Layer_BackgroundInterpolation.h"
 
 #include <SD.h>
 #include <GifDecoder.h>
