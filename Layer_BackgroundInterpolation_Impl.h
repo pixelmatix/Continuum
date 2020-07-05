@@ -85,6 +85,12 @@ void SMLayerBackgroundInterpolation<RGB, optionFlags>::begin(void) {
     // read to return a buffer to the pool when done refreshing
     cbInit(&bufferPool, BACKGROUND_LAYER_INTERPOLATION_NUM_BUFFERS);
 
+    // special case for interpolation, need a third buffer, to keep track of the previous refresh buffer
+#if (BACKGROUND_LAYER_INTERPOLATION_NUM_BUFFERS >= 3)
+    prevRefreshBuffer = cbGetNextWrite(&bufferPool);
+    cbWrite(&bufferPool);
+#endif
+
     // we have to start out with two writes, to get the first refresh buffer
     currentRefreshBuffer = cbGetNextWrite(&bufferPool);
     cbWrite(&bufferPool);
@@ -95,6 +101,9 @@ void SMLayerBackgroundInterpolation<RGB, optionFlags>::begin(void) {
 
     currentDrawBufferPtr = backgroundBuffers[currentDrawBuffer];
     currentRefreshBufferPtr = backgroundBuffers[currentRefreshBuffer];
+#if (BACKGROUND_LAYER_INTERPOLATION_NUM_BUFFERS >= 3)
+    prevRefreshBufferPtr = backgroundBuffers[prevRefreshBuffer];
+#endif
 }
 
 template <typename RGB, unsigned int optionFlags>
@@ -114,7 +123,7 @@ int SMLayerBackgroundInterpolation<RGB, optionFlags>::getRequestedBrightnessShif
 
 template <typename RGB, unsigned int optionFlags>
 bool SMLayerBackgroundInterpolation<RGB, optionFlags>::isLayerChanged() {
-    return swapPending;
+    return swapPending || interpolationEnabled;
 }
 
 // numShifts must be in range of 0-4, otherwise 16-bit to 12-bit conversion code breaks (would be an easy fix, but 4 is enough for APA102 GBC application)
@@ -977,9 +986,16 @@ void SMLayerBackgroundInterpolation<RGB, optionFlags>::handleBufferSwap(void) {
     // done with the refresh buffer, return it to the pool
     cbRead(&bufferPool);
 
+#if BACKGROUND_LAYER_INTERPOLATION_NUM_BUFFERS >= 3
+    prevRefreshBuffer = currentRefreshBuffer;
+#endif
     currentRefreshBuffer = currentDrawBuffer;
     currentDrawBuffer = cbGetNextWrite(&bufferPool);
     cbWrite(&bufferPool);
+
+#if BACKGROUND_LAYER_INTERPOLATION_NUM_BUFFERS >= 3
+    prevRefreshBufferPtr = backgroundBuffers[prevRefreshBuffer];
+#endif
 
     currentRefreshBufferPtr = backgroundBuffers[currentRefreshBuffer];
     currentDrawBufferPtr = backgroundBuffers[currentDrawBuffer];
@@ -1043,6 +1059,11 @@ void SMLayerBackgroundInterpolation<RGB, optionFlags>::setBrightness(uint8_t bri
 template<typename RGB, unsigned int optionFlags>
 void SMLayerBackgroundInterpolation<RGB, optionFlags>::enableColorCorrection(bool enabled) {
     this->ccEnabled = enabled;
+}
+
+template<typename RGB, unsigned int optionFlags>
+void SMLayerBackgroundInterpolation<RGB, optionFlags>::enableInterpolation(bool enabled) {
+    interpolationEnabled = enabled;
 }
 
 // reads pixel from drawing buffer, not refresh buffer

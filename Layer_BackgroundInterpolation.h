@@ -85,12 +85,17 @@ class SMLayerBackgroundInterpolation : public SM_Layer {
         void setFont(fontChoices newFont);
         void setBrightness(uint8_t brightness);
         void enableColorCorrection(bool enabled);
+        void enableInterpolation(bool enabled);
 
     private:
         bool ccEnabled = true;
+        bool interpolationEnabled = true;
 
         RGB *currentDrawBufferPtr;
         RGB *currentRefreshBufferPtr;
+#if (BACKGROUND_LAYER_INTERPOLATION_NUM_BUFFERS >= 3)
+        RGB *prevRefreshBufferPtr;
+#endif
 
         RGB *backgroundBuffers[BACKGROUND_LAYER_INTERPOLATION_NUM_BUFFERS];
 
@@ -121,6 +126,9 @@ class SMLayerBackgroundInterpolation : public SM_Layer {
         // keeping track of drawing buffers
         volatile unsigned char currentDrawBuffer;
         volatile unsigned char currentRefreshBuffer;
+#if (BACKGROUND_LAYER_INTERPOLATION_NUM_BUFFERS >= 3)
+        volatile unsigned char prevRefreshBuffer;
+#endif
         volatile bool swapPending;
         void handleBufferSwap(void);
         CircularBuffer_SM bufferPool;
