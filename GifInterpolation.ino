@@ -190,6 +190,7 @@ void setup() {
 #endif
 
     matrix.setBrightness(defaultBrightness);
+    matrix.setRefreshRate(240);
 
 
     // for large panels, may want to set the refresh rate lower to leave more CPU time to decoding GIFs (needed if GIFs are playing back slowly)
@@ -243,9 +244,10 @@ void setup() {
     }
 }
 
+float frameDelayMultiplier = 2.0;
 
 void loop() {
-    static unsigned long futureTime;
+    static unsigned long displayEndTime_millis, frameStartTime_micros, currentFrameDelay_micros, nMinus2FrameDelay_micros, nMinus1FrameDelay_micros;
 
     unsigned long now = millis();
 
@@ -256,12 +258,13 @@ void loop() {
 #endif   
 
     // default behavior is to play the gif for DISPLAY_TIME_SECONDS or for NUMBER_FULL_CYCLES, whichever comes first
-#if 1
-    if(now > futureTime || decoder.getCycleNo() > NUMBER_FULL_CYCLES) {
+#if 0
+    if(now >= displayEndTime_millis || decoder.getCycleNo() > NUMBER_FULL_CYCLES)
 #else
     // alt behavior is to play the gif until both DISPLAY_TIME_SECONDS and NUMBER_FULL_CYCLES have passed
-    if(now > futureTime && decoder.getCycleNo() > NUMBER_FULL_CYCLES) {
+    if(now >= displayEndTime_millis && decoder.getCycleNo() > NUMBER_FULL_CYCLES)
 #endif
+    {
         if (openGifFilenameByIndex(GIF_DIRECTORY, index) >= 0) {
             // Can clear screen for new animation here, but this might cause flicker with short animations
             // matrix.fillScreen(COLOR_BLACK);
@@ -270,7 +273,7 @@ void loop() {
             decoder.startDecoding();
 
             // Calculate time in the future to terminate animation
-            futureTime = now + (DISPLAY_TIME_SECONDS * 1000);
+            displayEndTime_millis = now + (DISPLAY_TIME_SECONDS * 1000);
         }
 
         // get the index for the next pass through
@@ -279,5 +282,28 @@ void loop() {
         }
     }
 
-    decoder.decodeFrame();
+    // decode new frame (n), but don't delay, and don't display it
+    decoder.decodeFrame(false);
+
+    // get the delay associated with the current frame (n), the one we're interpolating *to* with the next swapBuffers call
+    currentFrameDelay_micros = (decoder.getFrameDelay_ms() * 1000) * frameDelayMultiplier;
+
+    uint32_t t;
+
+    // wait for the delay associated with the frame (n-2), the frame that's currently the "previous" frame in backgroundLayer
+    do {
+        t = micros();
+    } while ((t - frameStartTime_micros) < nMinus2FrameDelay_micros);
+
+    // we're now done with frame (n-2).  frame (n-1) is being displayed.  we're going to start interpolating from frame (n-1) to new frame (n)
+
+    // capture the timestamp of when we last called swapBuffers() to begin interpolation between frame (n-1) and (n).  We'll call swapBuffers() again after waiting nMinus1FrameDelay_micros, regardless of how long the next call to decoder.decodeFrame(false) takes
+    frameStartTime_micros = t;
+
+    // swap buffers, begin interpolation between frame (n-1) and (n)
+    backgroundLayer.swapBuffers(true, nMinus1FrameDelay_micros);
+
+    // we're done with this frame loop, setup for the next loop where frame (n) becomes (n-1), (n-1) becomes (n-2)
+    nMinus2FrameDelay_micros = nMinus1FrameDelay_micros;
+    nMinus1FrameDelay_micros = currentFrameDelay_micros;
 }
