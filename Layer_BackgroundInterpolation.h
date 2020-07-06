@@ -33,6 +33,12 @@
 #define BACKGROUND_LAYER_INTERPOLATION_NUM_BUFFERS   3
 #define SIZE_OF_BG_INT_CC_LUT  (BACKGROUND_LAYER_INTERPOLATION_NUM_BUFFERS >= 3 ? 4096 : (sizeof(SM_RGB) <= 3 ? 256 : 4096))
 
+#define SMARTMATRIX_ALLOCATE_BACKGROUND_INTERPOLATION_LAYER(layer_name, width, height, storage_depth, background_options) \
+    typedef RGB_TYPE(storage_depth) SM_RGB;                                                                                 \
+    static RGB_TYPE(storage_depth) layer_name##Bitmap[BACKGROUND_LAYER_INTERPOLATION_NUM_BUFFERS*width*height];                \
+    static color_chan_t layer_name##colorCorrectionLUT[SIZE_OF_BG_INT_CC_LUT];                                                  \
+    static SMLayerBackgroundInterpolation<RGB_TYPE(storage_depth), background_options> layer_name(layer_name##Bitmap, width, height, layer_name##colorCorrectionLUT)  
+
 template <typename RGB, unsigned int optionFlags>
 class SMLayerBackgroundInterpolation : public SM_Layer {
     public:
