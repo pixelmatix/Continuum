@@ -22,6 +22,8 @@
  */
 
 #include <stdlib.h>     
+#include <algorithm>
+#include "arm_math.h"
 
 // call when backgroundBuffers and backgroundColorCorrectionLUT buffer is allocated outside of class
 template <typename RGB, unsigned int optionFlags>
@@ -73,7 +75,7 @@ void SMLayerBackgroundInterpolation<RGB, optionFlags>::begin(void) {
         //printf("largest free block %d: \r\n", heap_caps_get_largest_free_block(MALLOC_CAP_DMA));
     }
     if(!backgroundColorCorrectionLUT) {
-        backgroundColorCorrectionLUT = (color_chan_t *)malloc(sizeof(color_chan_t) * (sizeof(RGB) <= 3 ? 256 : 4096));
+        backgroundColorCorrectionLUT = (color_chan_t *)malloc(SIZE_OF_BG_INT_CC_LUT);
         assert(backgroundColorCorrectionLUT != NULL);
         //printf("largest free block %d: \r\n", heap_caps_get_largest_free_block(MALLOC_CAP_DMA));
     }
@@ -106,14 +108,68 @@ void SMLayerBackgroundInterpolation<RGB, optionFlags>::begin(void) {
 #endif
 }
 
+#if (BACKGROUND_LAYER_INTERPOLATION_NUM_BUFFERS >= 3)
+// this code and interpolation technique is from Fadecandy by Micah Scott
+template <typename RGB, unsigned int optionFlags>
+inline uint32_t SMLayerBackgroundInterpolation<RGB, optionFlags>::calculateFcInterpCoefficient()
+{
+    /*
+     * Calculate our interpolation coefficient. This is a value between
+     * 0x0000 and 0x10000, representing some point in between fbPrev and fbNext.
+     *
+     * We timestamp each frame at the moment its final packet has been received.
+     * In other words, fbNew has no valid timestamp yet, and fbPrev/fbNext both
+     * have timestamps in the recent past.
+     *
+     * fbNext's timestamp indicates when both fbPrev and fbNext entered their current
+     * position in the keyframe queue. The difference between fbPrev and fbNext indicate
+     * how long the interpolation between those keyframes should take.
+     */
+
+    // this is different than Fadecandy: tsPrev starts with now, tsNext doesn't start with now, we use micros and uint64_t for calculation to prevent overflow
+    uint32_t now = micros();
+    uint32_t tsPrev = interpolationStartTime_micros;
+    uint32_t tsNext = interpolationEndTime_micros;
+    uint32_t tsDiff = tsNext - tsPrev;
+    uint32_t tsElapsed = now - tsPrev;
+
+    // prevent divide by zero if interpolation isn't being used
+    if(!tsDiff)
+        return 0x10000;
+
+    // Careful to avoid overflows if the frames stop coming...
+    return (std::min<uint64_t>(tsElapsed, tsDiff) << 16) / tsDiff;
+}
+#endif
+
 template <typename RGB, unsigned int optionFlags>
 void SMLayerBackgroundInterpolation<RGB, optionFlags>::frameRefreshCallback(void) {
     handleBufferSwap();
 
+#if (BACKGROUND_LAYER_INTERPOLATION_NUM_BUFFERS >= 3)
+    uint32_t fcCoefficient;
+    if(interpolationEnabled)
+        fcCoefficient = calculateFcInterpCoefficient();
+    else
+        fcCoefficient = 0x10000;
+
+    if(sizeof(RGB) <= 3) {
+        // this will turn a 8-bit color into a 16-bit color (shifted into 32 bits)
+        icPrev = 257 * (0x10000 - fcCoefficient);
+        icNext = 257 * fcCoefficient;
+    } else {
+        // this will keep a 16-bit color a 16-bit color (shifted into 32 bits)
+        icPrev = (0x10000 - fcCoefficient);
+        icNext = fcCoefficient;
+    }
+
+    calculate12BitBackgroundLUT(backgroundColorCorrectionLUT, backgroundBrightness);
+#else
     if(sizeof(RGB) > 3)
         calculate12BitBackgroundLUT(backgroundColorCorrectionLUT, backgroundBrightness);
     else
         calculate8BitBackgroundLUT(backgroundColorCorrectionLUT, backgroundBrightness);
+#endif
 }
 
 template <typename RGB, unsigned int optionFlags>
@@ -132,6 +188,89 @@ void SMLayerBackgroundInterpolation<RGB, optionFlags>::setBrightnessShifts(int n
     pendingIdealBrightnessShifts = numShifts;
 }
 
+#if (BACKGROUND_LAYER_INTERPOLATION_NUM_BUFFERS >= 3)
+// This configuration supports optional interpolation, use the special fillRefreshRow methods
+template <typename RGB, unsigned int optionFlags>
+void SMLayerBackgroundInterpolation<RGB, optionFlags>::fillRefreshRow(uint16_t hardwareY, rgb48 refreshRow[], int brightnessShifts) {
+    RGB nextPixel;
+    RGB prevPixel;
+
+    int i;
+
+    if(this->ccEnabled) {
+        for(i=0; i<this->matrixWidth; i++) {
+            nextPixel = currentRefreshBufferPtr[(hardwareY * this->matrixWidth) + i];
+            prevPixel = prevRefreshBufferPtr[(hardwareY * this->matrixWidth) + i];
+            // load background pixel with color correction
+            rgb48 currentPixel;
+
+            // interpolate between prevPixel and nextPixel, resulting in a rgb48 color
+            currentPixel.red = ((prevPixel.red * icPrev + nextPixel.red * icNext) >> 16);
+            currentPixel.green = ((prevPixel.green * icPrev + nextPixel.green * icNext) >> 16);
+            currentPixel.blue = ((prevPixel.blue * icPrev + nextPixel.blue * icNext) >> 16);
+            // 48-bit source (16 bits per color channel): backgroundColorCorrectionLUT expects 12-bit value, returns 16-bit value
+            refreshRow[i] = rgb48(backgroundColorCorrectionLUT[currentPixel.red >> (4 - brightnessShifts)],
+                backgroundColorCorrectionLUT[currentPixel.green >> (4 - brightnessShifts)],
+                backgroundColorCorrectionLUT[currentPixel.blue >> (4 - brightnessShifts)]);     
+        }
+    } else {
+        for(i=0; i<this->matrixWidth; i++) {
+            nextPixel = currentRefreshBufferPtr[(hardwareY * this->matrixWidth) + i];
+            prevPixel = prevRefreshBufferPtr[(hardwareY * this->matrixWidth) + i];
+            // load background pixel without color correction
+            rgb48 currentPixel;
+
+            // interpolate between prevPixel and nextPixel, resulting in a rgb48 color
+            currentPixel.red = ((prevPixel.red * icPrev + nextPixel.red * icNext) >> 16);
+            currentPixel.green = ((prevPixel.green * icPrev + nextPixel.green * icNext) >> 16);
+            currentPixel.blue = ((prevPixel.blue * icPrev + nextPixel.blue * icNext) >> 16);
+
+            refreshRow[i] = currentPixel;     
+        }
+    }
+}
+
+template <typename RGB, unsigned int optionFlags>
+void SMLayerBackgroundInterpolation<RGB, optionFlags>::fillRefreshRow(uint16_t hardwareY, rgb24 refreshRow[], int brightnessShifts) {
+    RGB nextPixel;
+    RGB prevPixel;
+
+    int i;
+
+    if(this->ccEnabled) {
+        for(i=0; i<this->matrixWidth; i++) {
+            nextPixel = currentRefreshBufferPtr[(hardwareY * this->matrixWidth) + i];
+            prevPixel = prevRefreshBufferPtr[(hardwareY * this->matrixWidth) + i];
+            // load background pixel with color correction
+            rgb48 currentPixel;
+            // interpolate between prevPixel and nextPixel, resulting in a rgb48 color
+            currentPixel.red = ((prevPixel.red * icPrev + nextPixel.red * icNext) >> 16);
+            currentPixel.green = ((prevPixel.green * icPrev + nextPixel.green * icNext) >> 16);
+            currentPixel.blue = ((prevPixel.blue * icPrev + nextPixel.blue * icNext) >> 16);
+
+            // 48-bit source (16 bits per color channel): backgroundColorCorrectionLUT expects 12-bit value, returns 16-bit value
+            refreshRow[i] = rgb24(backgroundColorCorrectionLUT[currentPixel.red >> (4 - brightnessShifts)] >> 8,
+                backgroundColorCorrectionLUT[currentPixel.green >> (4 - brightnessShifts)] >> 8,
+                backgroundColorCorrectionLUT[currentPixel.blue >> (4 - brightnessShifts)] >> 8);     
+        }
+    } else {
+        for(i=0; i<this->matrixWidth; i++) {
+            nextPixel = currentRefreshBufferPtr[(hardwareY * this->matrixWidth) + i];
+            prevPixel = prevRefreshBufferPtr[(hardwareY * this->matrixWidth) + i];
+            // load background pixel without color correction
+            rgb24 currentPixel;
+            // interpolate between prevPixel and nextPixel, resulting in a rgb24 color
+            currentPixel.red = ((prevPixel.red * icPrev + nextPixel.red * icNext) >> 24);
+            currentPixel.green = ((prevPixel.green * icPrev + nextPixel.green * icNext) >> 24);
+            currentPixel.blue = ((prevPixel.blue * icPrev + nextPixel.blue * icNext) >> 24);
+
+            // 48-bit source (16 bits per color channel): backgroundColorCorrectionLUT expects 12-bit value, returns 16-bit value
+            refreshRow[i] = currentPixel;     
+        }
+    }
+}
+#else
+// not supporting interpolation, use the normal fillRefreshRow methods
 template <typename RGB, unsigned int optionFlags>
 void SMLayerBackgroundInterpolation<RGB, optionFlags>::fillRefreshRow(uint16_t hardwareY, rgb48 refreshRow[], int brightnessShifts) {
     RGB currentPixel;
@@ -209,9 +348,7 @@ void SMLayerBackgroundInterpolation<RGB, optionFlags>::fillRefreshRow(uint16_t h
         }
     }
 }
-
-extern volatile int totalFramesToInterpolate;
-extern volatile int framesInterpolated;
+#endif
 
 #define INLINE __attribute__( ( always_inline ) ) inline
 
@@ -1006,8 +1143,18 @@ void SMLayerBackgroundInterpolation<RGB, optionFlags>::handleBufferSwap(void) {
 // waits until previous swap is complete
 // waits until current swap is complete if copy is enabled
 template <typename RGB, unsigned int optionFlags>
-void SMLayerBackgroundInterpolation<RGB, optionFlags>::swapBuffers(bool copy) {
+void SMLayerBackgroundInterpolation<RGB, optionFlags>::swapBuffers(bool copy, unsigned long interpolationPeriod_us) {
     while (swapPending);
+
+#if (BACKGROUND_LAYER_INTERPOLATION_NUM_BUFFERS >= 3)
+    if(interpolationPeriod_us) {
+        interpolationStartTime_micros = micros();
+        interpolationEndTime_micros = interpolationStartTime_micros + interpolationPeriod_us;
+    } else {
+        interpolationStartTime_micros = 0;
+        interpolationEndTime_micros = 0;
+    }
+#endif
 
     swapPending = true;
 
@@ -1016,11 +1163,11 @@ void SMLayerBackgroundInterpolation<RGB, optionFlags>::swapBuffers(bool copy) {
 #if 1
         // workaround for bizarre (ESP32 optimization) bug - currentDrawBuffer and currentRefreshBuffer are volatile and are changed by an ISR while we're waiting for swapPending here.  They can't be used as parameters to memcpy directly though.  currentRefreshBuffer is always (currentDrawBuffer-1)%BACKGROUND_LAYER_INTERPOLATION_NUM_BUFFERS
         if(currentDrawBuffer == 1)
-            memcpy(backgroundBuffers[1], backgroundBuffers[(1-1)%BACKGROUND_LAYER_INTERPOLATION_NUM_BUFFERS], sizeof(RGB) * (this->matrixWidth * this->matrixHeight));
+            memcpy(backgroundBuffers[1], backgroundBuffers[(1-1+BACKGROUND_LAYER_INTERPOLATION_NUM_BUFFERS)%BACKGROUND_LAYER_INTERPOLATION_NUM_BUFFERS], sizeof(RGB) * (this->matrixWidth * this->matrixHeight));
         else if (currentDrawBuffer == 2)
-            memcpy(backgroundBuffers[2], backgroundBuffers[(2-1)%BACKGROUND_LAYER_INTERPOLATION_NUM_BUFFERS], sizeof(RGB) * (this->matrixWidth * this->matrixHeight));
+            memcpy(backgroundBuffers[2], backgroundBuffers[(2-1+BACKGROUND_LAYER_INTERPOLATION_NUM_BUFFERS)%BACKGROUND_LAYER_INTERPOLATION_NUM_BUFFERS], sizeof(RGB) * (this->matrixWidth * this->matrixHeight));
         else // currentDrawBuffer == 0
-            memcpy(backgroundBuffers[0], backgroundBuffers[(0-1)%BACKGROUND_LAYER_INTERPOLATION_NUM_BUFFERS], sizeof(RGB) * (this->matrixWidth * this->matrixHeight));
+            memcpy(backgroundBuffers[0], backgroundBuffers[(0-1+BACKGROUND_LAYER_INTERPOLATION_NUM_BUFFERS)%BACKGROUND_LAYER_INTERPOLATION_NUM_BUFFERS], sizeof(RGB) * (this->matrixWidth * this->matrixHeight));
 #else
         // Similar code also drawing from volatile variables doesn't work if optimization is turned on: currentDrawBuffer will be equal to currentRefreshBuffer and cause a crash from memcpy copying a buffer to itself.  Why?
         memcpy(backgroundBuffers[currentDrawBuffer], backgroundBuffers[currentRefreshBuffer], sizeof(RGB) * (this->matrixWidth * this->matrixHeight));

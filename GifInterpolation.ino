@@ -110,10 +110,7 @@ SMARTMATRIX_ALLOCATE_BUFFERS(matrix, kMatrixWidth, kMatrixHeight, kRefreshDepth,
 #if 0
 SMARTMATRIX_ALLOCATE_BACKGROUND_LAYER(backgroundLayer, kMatrixWidth, kMatrixHeight, COLOR_DEPTH, kBackgroundLayerOptions);
 #else
-typedef RGB_TYPE(COLOR_DEPTH) SM_RGB;
-static SM_RGB backgroundLayerBitmap[BACKGROUND_LAYER_INTERPOLATION_NUM_BUFFERS*kMatrixWidth*kMatrixHeight];
-static color_chan_t backgroundLayercolorCorrectionLUT[sizeof(SM_RGB) <= 3 ? 256 : 4096];
-static SMLayerBackgroundInterpolation<SM_RGB, kBackgroundLayerOptions> backgroundLayer(backgroundLayerBitmap, kMatrixWidth, kMatrixHeight, backgroundLayercolorCorrectionLUT);
+SMARTMATRIX_ALLOCATE_BACKGROUND_INTERPOLATION_LAYER(backgroundLayer, kMatrixWidth, kMatrixHeight, COLOR_DEPTH, kBackgroundLayerOptions);
 #endif
 
 #if (ENABLE_SCROLLING == 1)

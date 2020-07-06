@@ -31,6 +31,7 @@
 #define SM_BACKGROUND_OPTIONS_NONE     0
 
 #define BACKGROUND_LAYER_INTERPOLATION_NUM_BUFFERS   3
+#define SIZE_OF_BG_INT_CC_LUT  (BACKGROUND_LAYER_INTERPOLATION_NUM_BUFFERS >= 3 ? 4096 : (sizeof(SM_RGB) <= 3 ? 256 : 4096))
 
 template <typename RGB, unsigned int optionFlags>
 class SMLayerBackgroundInterpolation : public SM_Layer {
@@ -44,7 +45,7 @@ class SMLayerBackgroundInterpolation : public SM_Layer {
         int getRequestedBrightnessShifts();
         bool isLayerChanged();
         
-        void swapBuffers(bool copy = true);
+        void swapBuffers(bool copy = true, unsigned long interpolationPeriod_us = 0);
         bool isSwapPending();
         void copyRefreshToDrawing(void);
         void setBrightnessShifts(int numShifts);
@@ -89,7 +90,7 @@ class SMLayerBackgroundInterpolation : public SM_Layer {
 
     private:
         bool ccEnabled = true;
-        bool interpolationEnabled = true;
+        bool interpolationEnabled = (BACKGROUND_LAYER_INTERPOLATION_NUM_BUFFERS >= 3 ? true : false);
 
         RGB *currentDrawBufferPtr;
         RGB *currentRefreshBufferPtr;
@@ -132,6 +133,14 @@ class SMLayerBackgroundInterpolation : public SM_Layer {
         volatile bool swapPending;
         void handleBufferSwap(void);
         CircularBuffer_SM bufferPool;
+
+#if (BACKGROUND_LAYER_INTERPOLATION_NUM_BUFFERS >= 3)
+        uint32_t calculateFcInterpCoefficient();
+        uint32_t icPrev;
+        uint32_t icNext;
+        unsigned long interpolationStartTime_micros;
+        unsigned long interpolationEndTime_micros;
+#endif
 };
 
 #include "Layer_BackgroundInterpolation_Impl.h"
