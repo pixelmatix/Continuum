@@ -90,9 +90,6 @@
 // range 0-255
 const int defaultBrightness = 255;
 
-const rgb24 COLOR_BLACK = {
-    0, 0, 0 };
-
 #if (USE_SMARTMATRIX == 1)
 /* SmartMatrix configuration and memory allocation */
 #define COLOR_DEPTH 24                  // known working: 24, 48 - If the sketch uses type `rgb24` directly, COLOR_DEPTH must be 24
@@ -117,6 +114,9 @@ SMARTMATRIX_ALLOCATE_BACKGROUND_INTERPOLATION_LAYER(backgroundLayer, kMatrixWidt
 SMARTMATRIX_ALLOCATE_SCROLLING_LAYER(scrollingLayer, kMatrixWidth, kMatrixHeight, COLOR_DEPTH, kScrollingLayerOptions);
 #endif
 #endif
+
+const SM_RGB COLOR_BLACK = {
+    0, 0, 0 };
 
 /* template parameters are maxGifWidth, maxGifHeight, lzwMaxBits
  * 
@@ -158,7 +158,7 @@ void updateScreenCallback(void) {
 
 void drawPixelCallback(int16_t x, int16_t y, uint8_t red, uint8_t green, uint8_t blue) {
 #if (USE_SMARTMATRIX == 1)
-    backgroundLayer.drawPixel(x, y, {red, green, blue});
+    backgroundLayer.drawPixel(x, y, rgb24{red, green, blue});
 #endif
 }
 
