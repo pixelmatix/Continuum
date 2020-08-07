@@ -55,6 +55,7 @@ class SMLayerBackgroundInterpolation : public SM_Layer {
         bool isSwapPending();
         void copyRefreshToDrawing(void);
         void setBrightnessShifts(int numShifts);
+        void updateInterpolationPeriod(unsigned long interpolationPeriod_us);
 
         void drawPixel(int16_t x, int16_t y, const RGB& color);
         void drawLine(int16_t x0, int16_t y0, int16_t x1, int16_t y1, const RGB& color);

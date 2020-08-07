@@ -162,6 +162,44 @@ void drawPixelCallback(int16_t x, int16_t y, uint8_t red, uint8_t green, uint8_t
 #endif
 }
 
+const int readSensorPeriod_ms = 10;
+unsigned long lastSensorRead_millis;
+
+// modified Arduino smoothing example
+const int analogInPin = A9;  // Analog input pin that the potentiometer is attached to
+const int numReadings = 10;
+int readings[numReadings];      // the readings from the analog input
+int readIndex = 0;              // the index of the current reading
+long total = 0;                  // the running total
+float average = 0;                // the average
+
+float getSliderReading(void) {
+    // subtract the last reading:
+    total = total - readings[readIndex];
+    // read from the sensor:
+    readings[readIndex] = analogRead(analogInPin);
+    // add the reading to the total:
+    total = total + readings[readIndex];
+    // advance to the next position in the array:
+    readIndex = readIndex + 1;
+
+    // if we're at the end of the array...
+    if (readIndex >= numReadings) {
+      // ...wrap around to the beginning:
+      readIndex = 0;
+    }
+
+    // calculate the average:
+    return (float)total / numReadings;
+}
+
+void initSliderReading(void) {
+    // initialize all the readings to 0:
+    for (int thisReading = 0; thisReading < numReadings; thisReading++) {
+      readings[thisReading] = 0;
+    }
+}
+
 // Setup method runs once, when the sketch starts
 void setup() {
     decoder.setScreenClearCallback(screenClearCallback);
@@ -172,6 +210,8 @@ void setup() {
     decoder.setFilePositionCallback(filePositionCallback);
     decoder.setFileReadCallback(fileReadCallback);
     decoder.setFileReadBlockCallback(fileReadBlockCallback);
+
+    initSliderReading();
 
 #if (START_WITH_RANDOM_GIF == 1)
     // Seed the random number generator
@@ -246,6 +286,7 @@ void setup() {
 
 float frameDelayMultiplier = 2.0;
 
+bool frameDelayMultiplierUpdated = false;
 
 void loop() {
     static unsigned long displayEndTime_millis, frameStartTime_micros;
@@ -299,7 +340,27 @@ void loop() {
     do {
         t = micros();
 
+        if(millis() - lastSensorRead_millis > readSensorPeriod_ms) {
+            lastSensorRead_millis = millis();
+
+            average = getSliderReading();
+            Serial.println(average);
+
+            if(average > 1.0)
+                frameDelayMultiplier = (1000.0 * average) / 1024;
+            else
+                frameDelayMultiplier = 1.0;
+
+            frameDelayMultiplierUpdated = true;
+        }
+
         microsUntilChange = ((nMinus2FrameDelay_ms * 1000) * frameDelayMultiplier) - (t - frameStartTime_micros);
+
+        if(frameDelayMultiplierUpdated) {
+            frameDelayMultiplierUpdated = false;
+
+            backgroundLayer.updateInterpolationPeriod(microsUntilChange);
+        }
     } while (microsUntilChange > 0);
 
     // we're now done with frame (n-2).  frame (n-1) is being displayed.  we're going to start interpolating from frame (n-1) to new frame (n)

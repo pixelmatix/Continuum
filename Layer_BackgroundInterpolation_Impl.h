@@ -1140,6 +1140,47 @@ void SMLayerBackgroundInterpolation<RGB, optionFlags>::handleBufferSwap(void) {
     swapPending = false;
 }
 
+// update interpolation period to keep same current position as would be calculated with previous start/end times, but finishes with new end time interpolationPeriod_us from now
+template <typename RGB, unsigned int optionFlags>
+void SMLayerBackgroundInterpolation<RGB, optionFlags>::updateInterpolationPeriod(unsigned long interpolationPeriod_us) {
+    uint32_t now = micros();
+    uint32_t tsPrev = interpolationStartTime_micros;
+    uint32_t tsNext = interpolationEndTime_micros;
+    uint32_t tsDiff = tsNext - tsPrev;
+    uint32_t tsElapsed = now - tsPrev;
+
+    uint32_t tsNewNext = 0;
+    uint32_t tsNewPrev = 0;
+
+    // get existing interpolation coefficient, so we can keep interpolating from this frame across the updated remaining timespan
+    uint32_t interpCoefficient = (std::min<uint64_t>(tsElapsed, tsDiff) << 16) / tsDiff;
+
+    // calculation fails if the frame is done interpolating, in which case default new/next values are appropriate
+    if(interpCoefficient < 0x10000) {
+        tsNewNext = now + interpolationPeriod_us;
+        tsNewPrev = (((uint64_t)now << 16) - (interpCoefficient * (uint64_t)tsNewNext)) / ((1<<16) - interpCoefficient);
+    }
+
+#if 0
+    Serial.print("tsNext = ");
+    Serial.println(tsNext);
+    Serial.print("tsNewNext = ");
+    Serial.println(tsNewNext);
+    Serial.print("now = ");
+    Serial.println(now);
+    Serial.print("interpCoefficient = ");
+    Serial.println(interpCoefficient);
+    Serial.print("tsPrev = ");
+    Serial.println(tsPrev);
+
+    Serial.print("tsNewPrev = ");
+    Serial.println((uint32_t)tsNewPrev);
+#endif
+
+    interpolationStartTime_micros = tsNewPrev;
+    interpolationEndTime_micros = tsNewNext;
+}
+
 // waits until previous swap is complete
 // waits until current swap is complete if copy is enabled
 template <typename RGB, unsigned int optionFlags>
