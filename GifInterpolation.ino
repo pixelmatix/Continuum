@@ -246,9 +246,10 @@ void setup() {
 
 float frameDelayMultiplier = 2.0;
 
-void loop() {
-    static unsigned long displayEndTime_millis, frameStartTime_micros, currentFrameDelay_micros, nMinus2FrameDelay_micros, nMinus1FrameDelay_micros;
 
+void loop() {
+    static unsigned long displayEndTime_millis, frameStartTime_micros;
+    static unsigned int currentFrameDelay_ms, nMinus2FrameDelay_ms, nMinus1FrameDelay_ms;
     unsigned long now = millis();
 
 #if (START_WITH_RANDOM_GIF == 1)
@@ -289,14 +290,17 @@ void loop() {
     }
 
     // get the delay associated with the current frame (n), the one we're interpolating *to* with the next swapBuffers call
-    currentFrameDelay_micros = (decoder.getFrameDelay_ms() * 1000) * frameDelayMultiplier;
+    currentFrameDelay_ms = decoder.getFrameDelay_ms();
 
     uint32_t t;
+    int32_t microsUntilChange;
 
     // wait for the delay associated with the frame (n-2), the frame that's currently the "previous" frame in backgroundLayer
     do {
         t = micros();
-    } while ((t - frameStartTime_micros) < nMinus2FrameDelay_micros);
+
+        microsUntilChange = ((nMinus2FrameDelay_ms * 1000) * frameDelayMultiplier) - (t - frameStartTime_micros);
+    } while (microsUntilChange > 0);
 
     // we're now done with frame (n-2).  frame (n-1) is being displayed.  we're going to start interpolating from frame (n-1) to new frame (n)
 
@@ -304,9 +308,9 @@ void loop() {
     frameStartTime_micros = t;
 
     // swap buffers, begin interpolation between frame (n-1) and (n)
-    backgroundLayer.swapBuffers(true, nMinus1FrameDelay_micros);
+    backgroundLayer.swapBuffers(true, (nMinus1FrameDelay_ms * 1000) * frameDelayMultiplier);
 
     // we're done with this frame loop, setup for the next loop where frame (n) becomes (n-1), (n-1) becomes (n-2)
-    nMinus2FrameDelay_micros = nMinus1FrameDelay_micros;
-    nMinus1FrameDelay_micros = currentFrameDelay_micros;
+    nMinus2FrameDelay_ms = nMinus1FrameDelay_ms;
+    nMinus1FrameDelay_ms = currentFrameDelay_ms;
 }
