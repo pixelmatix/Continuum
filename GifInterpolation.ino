@@ -283,7 +283,10 @@ void loop() {
     }
 
     // decode new frame (n), but don't delay, and don't display it
-    decoder.decodeFrame(false);
+    if(decoder.decodeFrame(false) == ERROR_DONE_PARSING) {
+        // when the GIF wraps, decodeFrame doesn't actually decode a frame, start loop() again to either get next frame or switch to new GIF
+        return;
+    }
 
     // get the delay associated with the current frame (n), the one we're interpolating *to* with the next swapBuffers call
     currentFrameDelay_micros = (decoder.getFrameDelay_ms() * 1000) * frameDelayMultiplier;
