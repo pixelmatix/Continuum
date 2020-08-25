@@ -80,6 +80,8 @@
 #include <GifDecoder.h>
 #include "FilenameFunctions.h"
 
+#include "fscale.h"
+
 #define DISPLAY_TIME_SECONDS (5*60)
 #define NUMBER_FULL_CYCLES   1
 
@@ -177,7 +179,10 @@ const int numReadings = 10;
 int readings[numReadings];      // the readings from the analog input
 int readIndex = 0;              // the index of the current reading
 long total = 0;                  // the running total
-float average = 0;                // the average
+double average = 0;                // the average
+const float curveBoundary = 1024.0/2;
+
+float curve = 0.0;
 
 float getSliderReading(void) {
     // subtract the last reading:
@@ -196,7 +201,23 @@ float getSliderReading(void) {
     }
 
     // calculate the average:
-    return (float)total / numReadings;
+    float temp = (float)total / numReadings;
+
+#if 0
+    Serial.print(temp);
+    Serial.print(" ");
+
+    // I don't know why this delay is needed, but if it's not somewhere in this function (and not before or after the function call, the sketch will stop in some way and the screen will blank frequently
+    // It's the combination of the second call to Serial.print(), calling fscale, and having a large panel size that seems to be causing this behavior
+    // delay must be in this function, as in there's something important on the stack?
+    delayMicroseconds(1);
+#endif
+
+    // It's not easy or maybe even possible to choose a single expoential curve that gives good resolution in the lower range, and changes quickly over the higher range, split it into two curves
+    if(temp < curveBoundary)
+        return fscale( 0, curveBoundary, 1.0, 25.0, temp, 0.0);
+    else
+        return fscale( curveBoundary, 1023.0, 25.0, 1023, temp, curve);
 }
 
 void initSliderReading(void) {
@@ -225,6 +246,8 @@ void setup() {
 #endif
 
     Serial.begin(115200);
+    Serial.setTimeout(1);
+
     Serial.println("Starting AnimatedGIFs Sketch");
 
 
@@ -295,6 +318,15 @@ void loop() {
     static unsigned int currentFrameDelay_ms, nMinus2FrameDelay_ms, nMinus1FrameDelay_ms;
     unsigned long now = millis();
 
+    // TODO: we need to determine the exponent of the curve through trial and error, allow easily changing curve over Serial
+    float tempfloat = Serial.parseFloat();
+    if(tempfloat) {
+        Serial.print("Got: ");
+      Serial.println(tempfloat, 10);
+
+      curve = tempfloat;
+    }
+
 #if (START_WITH_RANDOM_GIF == 1)
     static int index = random(num_files);
 #else
@@ -345,7 +377,8 @@ void loop() {
         if(millis() - lastSensorRead_millis > readSensorPeriod_ms) {
             lastSensorRead_millis = millis();
 
-            average = getSliderReading();
+
+            average = (double)getSliderReading();
             Serial.println(average);
 
             if(average > 1.0)
