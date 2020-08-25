@@ -89,7 +89,7 @@
 #define ENABLE_SCROLLING        1
 #define START_WITH_RANDOM_GIF   1
 
-#define DEBUG_PRINT_FRAMESTATS    0
+#define DEBUG_PRINT_FRAMESTATS  0
 
 // range 0-255
 const int defaultBrightness = 255;
