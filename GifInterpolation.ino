@@ -172,7 +172,7 @@ void drawPixelCallback(int16_t x, int16_t y, uint8_t red, uint8_t green, uint8_t
 #endif
 }
 
-const int readSensorPeriod_ms = 10;
+const int readSensorPeriod_ms = 100;
 unsigned long lastSensorRead_millis;
 
 // modified Arduino smoothing example
@@ -310,7 +310,6 @@ void setup() {
 }
 
 double frameDelayMultiplier = 7.0;
-
 bool frameDelayMultiplierUpdated = false;
 
 void loop() {
