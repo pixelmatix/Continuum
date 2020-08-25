@@ -396,10 +396,13 @@ void setup() {
 double frameDelayMultiplier = 7.0;
 bool frameDelayMultiplierUpdated = false;
 
+const int indexChangedFrameDelay_ms = 100;
+
 void loop() {
     static unsigned long displayEndTime_millis, frameStartTime_micros;
     static unsigned int currentFrameDelay_ms, nMinus2FrameDelay_ms, nMinus1FrameDelay_ms;
     unsigned long now = millis();
+    bool firstFrame = false;
 
     // TODO: we need to determine the exponent of the curve through trial and error, allow easily changing curve over Serial
     float tempfloat = Serial.parseFloat();
@@ -427,6 +430,14 @@ void loop() {
     if(gifIndexChanged) {
         gifIndexChanged = false;
         
+        // normally we interpolate to the next frame over a potentially long period of time, but we want to see the first frame of the next GIF quickly, so let's bypass that logic
+        firstFrame = true;
+
+        // quickly switch to the next frame
+        nMinus2FrameDelay_ms = 0;
+        nMinus1FrameDelay_ms = 0;
+        frameDelayMultiplierUpdated = true;
+
         if (openGifFilenameByIndex(GIF_DIRECTORY, gifIndex) >= 0) {
             // Can clear screen for new animation here, but this might cause flicker with short animations
             // matrix.fillScreen(COLOR_BLACK);
@@ -451,6 +462,10 @@ void loop() {
 
     // get the delay associated with the current frame (n), the one we're interpolating *to* with the next swapBuffers call
     currentFrameDelay_ms = decoder.getFrameDelay_ms();
+
+    // special case for the first frame - interpolate from the previous GIF to the first frame of the new GIF relatively quickly
+    if(firstFrame)
+        currentFrameDelay_ms = indexChangedFrameDelay_ms;
 
     uint32_t t;
     int32_t microsUntilChange;
@@ -487,6 +502,12 @@ void loop() {
             backgroundLayer.updateInterpolationPeriod(microsUntilChange);
         }
 
+        // special case for the first frame - stop interpolating the two previous frames of the old GIF, so we can interpolate to the new GIF quickly
+        if(firstFrame) {
+            microsUntilChange = 0;
+            backgroundLayer.updateInterpolationPeriod(0);
+        }
+
         // If we don't delay at least a bit SmartMatrix Library starts dropping frames
         if(microsUntilChange > 0)
             delayMicroseconds(min(microsUntilChange, 100));
@@ -498,7 +519,11 @@ void loop() {
     frameStartTime_micros = t;
 
     // swap buffers, begin interpolation between frame (n-1) and (n)
-    backgroundLayer.swapBuffers(true, (nMinus1FrameDelay_ms * 1000) * frameDelayMultiplier);
+    if(!firstFrame) {
+        backgroundLayer.swapBuffers(true, (nMinus1FrameDelay_ms * 1000) * frameDelayMultiplier);
+    } else {
+        backgroundLayer.swapBuffers(true, 0);
+    }
 
     // we're done with this frame loop, setup for the next loop where frame (n) becomes (n-1), (n-1) becomes (n-2)
     nMinus2FrameDelay_ms = nMinus1FrameDelay_ms;
