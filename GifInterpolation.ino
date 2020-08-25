@@ -80,6 +80,9 @@
 #include <GifDecoder.h>
 #include "FilenameFunctions.h"
 
+#include <Bounce.h>
+#include <Encoder.h>
+
 #include "fscale.h"
 
 #define DISPLAY_TIME_SECONDS (5*60)
@@ -193,6 +196,43 @@ const float curveBoundary = 1024.0/2;
 
 float curve = 0.0;
 
+const int buttonPin1 = 18;
+Bounce pushbutton1 = Bounce(buttonPin1, 10);  // 10 ms debounce
+const int buttonPin2 = 21;
+Bounce pushbutton2 = Bounce(buttonPin2, 10);  // 10 ms debounce
+
+Encoder knobLeft(16, 17);
+Encoder knobRight(19, 20);
+
+long positionLeft  = -999;
+long positionRight = -999;
+
+unsigned int count = 0;            // how many times has it changed to low
+unsigned long countAt = 0;         // when count changed
+unsigned int countPrinted = 0;     // last count printed
+
+void checkEncodersState(void) {
+    long newLeft, newRight;
+    newLeft = knobLeft.read();
+    newRight = knobRight.read();
+    if (newLeft != positionLeft || newRight != positionRight) {
+      Serial.print("Left = ");
+      Serial.print(newLeft);
+      Serial.print(", Right = ");
+      Serial.print(newRight);
+      Serial.println();
+      positionLeft = newLeft;
+      positionRight = newRight;
+    }
+}
+
+void checkButtonsState(void) {
+    if (pushbutton1.update() && pushbutton1.fallingEdge())
+        Serial.println("********* BUTTON 1 **********");
+    if (pushbutton2.update() && pushbutton2.fallingEdge())
+        Serial.println("********* BUTTON 2 **********");
+}
+
 float getSliderReading(void) {
     // subtract the last reading:
     total = total - readings[readIndex];
@@ -244,6 +284,9 @@ void setup() {
     decoder.setFilePositionCallback(filePositionCallback);
     decoder.setFileReadCallback(fileReadCallback);
     decoder.setFileReadBlockCallback(fileReadBlockCallback);
+
+    pinMode(buttonPin1, INPUT_PULLUP);
+    pinMode(buttonPin1, INPUT_PULLUP);
 
     initSliderReading();
 
@@ -397,6 +440,9 @@ void loop() {
 
             frameDelayMultiplierUpdated = true;
         }
+
+        checkEncodersState();
+        checkButtonsState();
 
         t = micros();
 
