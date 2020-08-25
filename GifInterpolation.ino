@@ -91,10 +91,16 @@
 #define ENABLE_SCROLLING        1
 #define START_WITH_RANDOM_GIF   1
 
-#define DEBUG_PRINT_FRAMESTATS  0
+#define DEBUG_PRINT_FRAMESTATS          0
+#define DEBUG_PRINT_ENCODER_UPDATES     0
+#define DEBUG_PRINT_BUTTON_UPDATES      0
+#define DEBUG_PRINT_SLIDER_UPDATES      0
 
 // range 0-255
 const int defaultBrightness = 255;
+int brightness = defaultBrightness;
+const int brightnessIncrement = 5;
+const int maxBrightness = 255;
 
 /* SmartMatrix configuration and memory allocation */
 #define COLOR_DEPTH 24                  // known working: 24, 48 - If the sketch uses type `rgb24` directly, COLOR_DEPTH must be 24
@@ -216,18 +222,24 @@ void checkEncodersState(void) {
     newRight = knobRight.read();
 
     if (newLeft != positionLeft) {
+#if (DEBUG_PRINT_ENCODER_UPDATES == 1)
         Serial.print("Left = ");
         Serial.print(newLeft);
+#endif
 
         // encoder sends four pulses per notch, so we only care if this pulse position is a multiple of 4
         if(!(newLeft % 4)) {
             gifIndexChanged = true;
             if(newLeft > positionLeft) {
                 gifIndex++;
+#if (DEBUG_PRINT_ENCODER_UPDATES == 1)
                 Serial.print(" index++");
+#endif
             } else {
                 gifIndex--;
+#if (DEBUG_PRINT_ENCODER_UPDATES == 1)
                 Serial.print(" index--");
+#endif
             }
         }
 
@@ -235,28 +247,50 @@ void checkEncodersState(void) {
 
         positionLeft = newLeft;
 
+#if (DEBUG_PRINT_ENCODER_UPDATES == 1)
         Serial.print(" index=");
         Serial.println(gifIndex);
-    }    
-
-#if 0
-    if (newLeft != positionLeft || newRight != positionRight) {
-      Serial.print("Left = ");
-      Serial.print(newLeft);
-      Serial.print(", Right = ");
-      Serial.print(newRight);
-      Serial.println();
-      positionLeft = newLeft;
-      positionRight = newRight;
-    }
 #endif
+    }
+
+    if (newRight != positionRight) {
+        // encoder sends four pulses per notch, so we only care if this pulse position is a multiple of 4
+        if(!(newRight % 4)) {
+            if(newRight > positionRight) {
+                brightness += brightnessIncrement;
+#if (DEBUG_PRINT_ENCODER_UPDATES == 1)
+                Serial.print(" brightness++");
+#endif
+            } else {
+                brightness -= brightnessIncrement;
+#if (DEBUG_PRINT_ENCODER_UPDATES == 1)
+                Serial.print(" brightness--");
+#endif
+            }
+        }
+
+        if(brightness < 0)
+            brightness = 0;
+        if(brightness > maxBrightness)
+            brightness = maxBrightness;
+
+        matrix.setBrightness(brightness);
+
+        positionRight = newRight;
+    }
 }
 
 void checkButtonsState(void) {
-    if (pushbutton1.update() && pushbutton1.fallingEdge())
+    if (pushbutton1.update() && pushbutton1.fallingEdge()) {
+#if (DEBUG_PRINT_BUTTON_UPDATES == 1)
         Serial.println("********* BUTTON 1 **********");
-    if (pushbutton2.update() && pushbutton2.fallingEdge())
+#endif
+    }
+    if (pushbutton2.update() && pushbutton2.fallingEdge()) {
+#if (DEBUG_PRINT_BUTTON_UPDATES == 1)
         Serial.println("********* BUTTON 2 **********");
+#endif
+    }
 }
 
 float getSliderReading(void) {
@@ -479,7 +513,9 @@ void loop() {
             lastSensorRead_millis = millis();
 
             average = (double)getSliderReading();
+#if (DEBUG_PRINT_SLIDER_UPDATES == 1)
             Serial.println(average);
+#endif
 
             if(average > 1.0)
                 frameDelayMultiplier = (1000.0 * average) / 1024;
