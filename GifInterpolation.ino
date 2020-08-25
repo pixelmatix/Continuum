@@ -309,7 +309,7 @@ void setup() {
     }
 }
 
-float frameDelayMultiplier = 2.0;
+double frameDelayMultiplier = 7.0;
 
 bool frameDelayMultiplierUpdated = false;
 
