@@ -207,14 +207,39 @@ Encoder knobRight(19, 20);
 long positionLeft  = -999;
 long positionRight = -999;
 
-unsigned int count = 0;            // how many times has it changed to low
-unsigned long countAt = 0;         // when count changed
-unsigned int countPrinted = 0;     // last count printed
+int gifIndex;
+bool gifIndexChanged = true;
 
 void checkEncodersState(void) {
     long newLeft, newRight;
     newLeft = knobLeft.read();
     newRight = knobRight.read();
+
+    if (newLeft != positionLeft) {
+        Serial.print("Left = ");
+        Serial.print(newLeft);
+
+        // encoder sends four pulses per notch, so we only care if this pulse position is a multiple of 4
+        if(!(newLeft % 4)) {
+            gifIndexChanged = true;
+            if(newLeft > positionLeft) {
+                gifIndex++;
+                Serial.print(" index++");
+            } else {
+                gifIndex--;
+                Serial.print(" index--");
+            }
+        }
+
+        gifIndex = (gifIndex + num_files) % num_files;
+
+        positionLeft = newLeft;
+
+        Serial.print(" index=");
+        Serial.println(gifIndex);
+    }    
+
+#if 0
     if (newLeft != positionLeft || newRight != positionRight) {
       Serial.print("Left = ");
       Serial.print(newLeft);
@@ -224,6 +249,7 @@ void checkEncodersState(void) {
       positionLeft = newLeft;
       positionRight = newRight;
     }
+#endif
 }
 
 void checkButtonsState(void) {
@@ -359,6 +385,12 @@ void setup() {
         Serial.println("Empty gifs directory");
         while(1);
     }
+
+#if (START_WITH_RANDOM_GIF == 1)
+    gifIndex = random(num_files);
+#else
+    gifIndex = 0;
+#endif   
 }
 
 double frameDelayMultiplier = 7.0;
@@ -378,12 +410,6 @@ void loop() {
       curve = tempfloat;
     }
 
-#if (START_WITH_RANDOM_GIF == 1)
-    static int index = random(num_files);
-#else
-     static int index = 0;
-#endif   
-
     // default behavior is to play the gif for DISPLAY_TIME_SECONDS or for NUMBER_FULL_CYCLES, whichever comes first
 #if 0
     if(now >= displayEndTime_millis || decoder.getCycleNo() > NUMBER_FULL_CYCLES)
@@ -392,7 +418,16 @@ void loop() {
     if(now >= displayEndTime_millis && decoder.getCycleNo() > NUMBER_FULL_CYCLES)
 #endif
     {
-        if (openGifFilenameByIndex(GIF_DIRECTORY, index) >= 0) {
+        gifIndexChanged = true;
+
+        if (++gifIndex >= num_files)
+            gifIndex = 0;
+    }
+
+    if(gifIndexChanged) {
+        gifIndexChanged = false;
+        
+        if (openGifFilenameByIndex(GIF_DIRECTORY, gifIndex) >= 0) {
             // Can clear screen for new animation here, but this might cause flicker with short animations
             // matrix.fillScreen(COLOR_BLACK);
             // matrix.swapBuffers();
@@ -401,11 +436,6 @@ void loop() {
 
             // Calculate time in the future to terminate animation
             displayEndTime_millis = now + (DISPLAY_TIME_SECONDS * 1000);
-        }
-
-        // get the index for the next pass through
-        if (++index >= num_files) {
-            index = 0;
         }
     }
 
@@ -427,6 +457,9 @@ void loop() {
 
     // wait for the delay associated with the frame (n-2), the frame that's currently the "previous" frame in backgroundLayer
     do {
+        if(gifIndexChanged)
+            return;
+
         if(millis() - lastSensorRead_millis > readSensorPeriod_ms) {
             lastSensorRead_millis = millis();
 
