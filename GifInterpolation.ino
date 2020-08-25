@@ -209,9 +209,7 @@ float getSliderReading(void) {
     Serial.print(temp);
     Serial.print(" ");
 
-    // I don't know why this delay is needed, but if it's not somewhere in this function (and not before or after the function call, the sketch will stop in some way and the screen will blank frequently
-    // It's the combination of the second call to Serial.print(), calling fscale, and having a large panel size that seems to be causing this behavior
-    // delay must be in this function, as in there's something important on the stack?
+    // If this delay isn't in this function when we print SmartMatrix Library starts dropping frames
     delayMicroseconds(1);
 #endif
 
@@ -381,7 +379,6 @@ void loop() {
         if(millis() - lastSensorRead_millis > readSensorPeriod_ms) {
             lastSensorRead_millis = millis();
 
-
             average = (double)getSliderReading();
             Serial.println(average);
 
@@ -402,6 +399,10 @@ void loop() {
 
             backgroundLayer.updateInterpolationPeriod(microsUntilChange);
         }
+
+        // If we don't delay at least a bit SmartMatrix Library starts dropping frames
+        if(microsUntilChange > 0)
+            delayMicroseconds(min(microsUntilChange, 100));
     } while (microsUntilChange > 0);
 
     // we're now done with frame (n-2).  frame (n-1) is being displayed.  we're going to start interpolating from frame (n-1) to new frame (n)
