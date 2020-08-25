@@ -125,6 +125,22 @@ SMARTMATRIX_ALLOCATE_SCROLLING_LAYER(scrollingLayer, kMatrixWidth, kMatrixHeight
 #endif
 #endif
 
+#define ENABLE_APA102_REFRESH   1
+
+#if (ENABLE_APA102_REFRESH == 1)
+// adjust this to your APA matrix/strip - set kApaMatrixHeight to 1 for a strip
+const uint8_t kApaMatrixWidth = 16;
+const uint8_t kApaMatrixHeight = 16;
+const uint8_t kApaRefreshDepth = 36;        // known working: 36
+const uint8_t kApaDmaBufferRows = 1;        // known working: 1
+const uint8_t kApaPanelType = 0;            // not used for APA matrices as of now
+const uint8_t kApaMatrixOptions = (SMARTMATRIX_OPTIONS_NONE);      // no options for APA matrices as of not 
+const uint8_t kApaBackgroundLayerOptions = (SM_BACKGROUND_OPTIONS_NONE);
+
+SMARTMATRIX_APA_ALLOCATE_BUFFERS(apamatrix, kApaMatrixWidth, kApaMatrixHeight, kApaRefreshDepth, kApaDmaBufferRows, kApaPanelType, kApaMatrixOptions);
+SMARTMATRIX_ALLOCATE_BACKGROUND_LAYER(apaBackgroundLayer, kApaMatrixWidth, kApaMatrixHeight, COLOR_DEPTH, kApaBackgroundLayerOptions);
+#endif
+
 const SM_RGB COLOR_BLACK = {
     0, 0, 0 };
 
@@ -271,14 +287,26 @@ void setup() {
 
     // alternatively, for large panels on ESP32, may want to set the calculation refresh rate divider lower to leave more CPU time to decoding GIFs (needed if GIFs are playing back slowly) - this has the same effect as matrix.setMaxCalculationCpuPercentage() but is set with a different parameter
     //matrix.setCalcRefreshRateDivider(4);
+#if (ENABLE_APA102_REFRESH == 1)
+    // enable the APA102 buffers to drive out the SPI signals
+    pinMode(SMARTLED_APA_ENABLE_PIN, OUTPUT);
+    digitalWrite(SMARTLED_APA_ENABLE_PIN, HIGH);  // enable access to LEDs    
 
     // The ESP32 SD Card library is going to want to malloc about 28000 bytes of DMA-capable RAM, make sure at least that much is left free
     matrix.begin(28000);
 #endif
+    apamatrix.addLayer(&apaBackgroundLayer);
+    apamatrix.begin();
+
+    // lower the brightness
+    apamatrix.setBrightness(255);
 
     // Clear screen
     backgroundLayer.fillScreen(COLOR_BLACK);
     backgroundLayer.swapBuffers(false);
+    apaBackgroundLayer.fillScreen(COLOR_BLACK);
+    apaBackgroundLayer.swapBuffers(false);
+#endif
 #endif
 
     if(initFileSystem(SD_CS) < 0) {
