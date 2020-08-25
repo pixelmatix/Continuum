@@ -85,7 +85,6 @@
 #define DISPLAY_TIME_SECONDS (5*60)
 #define NUMBER_FULL_CYCLES   1
 
-#define USE_SMARTMATRIX         1
 #define ENABLE_SCROLLING        1
 #define START_WITH_RANDOM_GIF   1
 
@@ -94,7 +93,6 @@
 // range 0-255
 const int defaultBrightness = 255;
 
-#if (USE_SMARTMATRIX == 1)
 /* SmartMatrix configuration and memory allocation */
 #define COLOR_DEPTH 24                  // known working: 24, 48 - If the sketch uses type `rgb24` directly, COLOR_DEPTH must be 24
 #if 1
@@ -122,7 +120,6 @@ SMARTMATRIX_ALLOCATE_BACKGROUND_INTERPOLATION_LAYER(backgroundLayer, kMatrixWidt
 
 #if (ENABLE_SCROLLING == 1)
 SMARTMATRIX_ALLOCATE_SCROLLING_LAYER(scrollingLayer, kMatrixWidth, kMatrixHeight, COLOR_DEPTH, kScrollingLayerOptions);
-#endif
 #endif
 
 #define ENABLE_APA102_REFRESH   1
@@ -171,21 +168,15 @@ GifDecoder<kMatrixWidth, kMatrixHeight, 12> decoder;
 int num_files;
 
 void screenClearCallback(void) {
-#if (USE_SMARTMATRIX == 1)
   backgroundLayer.fillScreen({0,0,0});
-#endif
 }
 
 void updateScreenCallback(void) {
-#if (USE_SMARTMATRIX == 1)
   backgroundLayer.swapBuffers();
-#endif
 }
 
 void drawPixelCallback(int16_t x, int16_t y, uint8_t red, uint8_t green, uint8_t blue) {
-#if (USE_SMARTMATRIX == 1)
     backgroundLayer.drawPixel(x, y, rgb24{red, green, blue});
-#endif
 }
 
 const int readSensorPeriod_ms = 100;
@@ -267,7 +258,6 @@ void setup() {
     Serial.println("Starting AnimatedGIFs Sketch");
 
 
-#if (USE_SMARTMATRIX == 1)
     // Initialize matrix
     matrix.addLayer(&backgroundLayer); 
 #if (ENABLE_SCROLLING == 1)
@@ -277,24 +267,18 @@ void setup() {
     matrix.setBrightness(defaultBrightness);
     matrix.setRefreshRate(250);
 
-#if !defined(ESP32)
+
     matrix.begin();
-#endif
 
-#if defined(ESP32)
-    // for large panels on ESP32, may want to set the max percentage time dedicated to updating the refresh frames lower, to leave more CPU time to decoding GIFs (needed if GIFs are playing back slowly)
-    //matrix.setMaxCalculationCpuPercentage(50);
+    // Clear screen
+    backgroundLayer.fillScreen(COLOR_BLACK);
+    backgroundLayer.swapBuffers(false);
 
-    // alternatively, for large panels on ESP32, may want to set the calculation refresh rate divider lower to leave more CPU time to decoding GIFs (needed if GIFs are playing back slowly) - this has the same effect as matrix.setMaxCalculationCpuPercentage() but is set with a different parameter
-    //matrix.setCalcRefreshRateDivider(4);
 #if (ENABLE_APA102_REFRESH == 1)
     // enable the APA102 buffers to drive out the SPI signals
     pinMode(SMARTLED_APA_ENABLE_PIN, OUTPUT);
     digitalWrite(SMARTLED_APA_ENABLE_PIN, HIGH);  // enable access to LEDs    
 
-    // The ESP32 SD Card library is going to want to malloc about 28000 bytes of DMA-capable RAM, make sure at least that much is left free
-    matrix.begin(28000);
-#endif
     apamatrix.addLayer(&apaBackgroundLayer);
     apamatrix.begin();
 
@@ -302,11 +286,8 @@ void setup() {
     apamatrix.setBrightness(255);
 
     // Clear screen
-    backgroundLayer.fillScreen(COLOR_BLACK);
-    backgroundLayer.swapBuffers(false);
     apaBackgroundLayer.fillScreen(COLOR_BLACK);
     apaBackgroundLayer.swapBuffers(false);
-#endif
 #endif
 
     if(initFileSystem(SD_CS) < 0) {
