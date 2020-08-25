@@ -378,8 +378,6 @@ void loop() {
 
     // wait for the delay associated with the frame (n-2), the frame that's currently the "previous" frame in backgroundLayer
     do {
-        t = micros();
-
         if(millis() - lastSensorRead_millis > readSensorPeriod_ms) {
             lastSensorRead_millis = millis();
 
@@ -394,6 +392,8 @@ void loop() {
 
             frameDelayMultiplierUpdated = true;
         }
+
+        t = micros();
 
         microsUntilChange = ((nMinus2FrameDelay_ms * 1000) * frameDelayMultiplier) - (t - frameStartTime_micros);
 
