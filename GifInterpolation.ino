@@ -89,6 +89,8 @@
 #define ENABLE_SCROLLING        1
 #define START_WITH_RANDOM_GIF   1
 
+#define DEBUG_PRINT_FRAMESTATS    0
+
 // range 0-255
 const int defaultBrightness = 255;
 
@@ -364,6 +366,10 @@ void loop() {
         return;
     }
 
+#if (DEBUG_PRINT_FRAMESTATS == 1)
+    int timeToDecode_ms = millis() - now;
+#endif
+
     // get the delay associated with the current frame (n), the one we're interpolating *to* with the next swapBuffers call
     currentFrameDelay_ms = decoder.getFrameDelay_ms();
 
@@ -409,4 +415,14 @@ void loop() {
     // we're done with this frame loop, setup for the next loop where frame (n) becomes (n-1), (n-1) becomes (n-2)
     nMinus2FrameDelay_ms = nMinus1FrameDelay_ms;
     nMinus1FrameDelay_ms = currentFrameDelay_ms;
+
+#if (DEBUG_PRINT_FRAMESTATS == 1)
+    Serial.print(decoder.getFrameNo());
+    Serial.print(" ");
+    Serial.print(decoder.getFrameDelay_ms());
+    Serial.print(" ");
+    Serial.print(matrix.getRefreshRate());
+    Serial.print(" ");
+    Serial.println(timeToDecode_ms);
+#endif
 }
