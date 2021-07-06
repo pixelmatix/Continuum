@@ -372,13 +372,13 @@ void SMLayerBackgroundInterpolation<RGB, optionFlags>::drawPixel(int16_t x, int1
         return;
 
     // map pixel into hardware buffer before writing
-    if (this->rotation == rotation0) {
+    if (this->layerRotation == rotation0) {
         hwx = x;
         hwy = y;
-    } else if (this->rotation == rotation180) {
+    } else if (this->layerRotation == rotation180) {
         hwx = (this->matrixWidth - 1) - x;
         hwy = (this->matrixHeight - 1) - y;
-    } else if (this->rotation == rotation90) {
+    } else if (this->layerRotation == rotation90) {
         hwx = (this->matrixWidth - 1) - y;
         hwy = x;
     } else { /* if (rotation == rotation270)*/
@@ -433,13 +433,13 @@ void SMLayerBackgroundInterpolation<RGB, optionFlags>::drawFastHLine(int16_t x0,
         x1 = this->localWidth - 1;
 
     // map to hardware drawline function
-    if (this->rotation == rotation0) {
+    if (this->layerRotation == rotation0) {
         drawHardwareHLine(x0, x1, y, color);
-    } else if (this->rotation == rotation180) {
+    } else if (this->layerRotation == rotation180) {
         drawHardwareHLine((this->matrixWidth - 1) - x1, (this->matrixWidth - 1) - x0, (this->matrixHeight - 1) - y, color);
-    } else if (this->rotation == rotation90) {
+    } else if (this->layerRotation == rotation90) {
         drawHardwareVLine((this->matrixWidth - 1) - y, x0, x1, color);
-    } else { /* if (rotation == rotation270)*/
+    } else { /* if (layerRotation == rotation270)*/
         drawHardwareVLine(y, (this->matrixHeight - 1) - x1, (this->matrixHeight - 1) - x0, color);
     }
 }
@@ -462,13 +462,13 @@ void SMLayerBackgroundInterpolation<RGB, optionFlags>::drawFastVLine(int16_t x, 
         y1 = this->localHeight - 1;
 
     // map to hardware drawline function
-    if (this->rotation == rotation0) {
+    if (this->layerRotation == rotation0) {
         drawHardwareVLine(x, y0, y1, color);
-    } else if (this->rotation == rotation180) {
+    } else if (this->layerRotation == rotation180) {
         drawHardwareVLine((this->matrixWidth - 1) - x, (this->matrixHeight - 1) - y1, (this->matrixHeight - 1) - y0, color);
-    } else if (this->rotation == rotation90) {
+    } else if (this->layerRotation == rotation90) {
         drawHardwareHLine((this->matrixWidth - 1) - y1, (this->matrixWidth - 1) - y0, x, color);
-    } else { /* if (rotation == rotation270)*/
+    } else { /* if (layerRotation == rotation270)*/
         drawHardwareHLine(y0, y1, (this->matrixHeight - 1) - x, color);
     }
 }
@@ -1264,16 +1264,16 @@ const RGB SMLayerBackgroundInterpolation<RGB, optionFlags>::readPixel(int16_t x,
         return (RGB){0, 0, 0};
 
     // map pixel into hardware buffer before reading
-    if (this->rotation == rotation0) {
+    if (this->layerRotation == rotation0) {
         hwx = x;
         hwy = y;
-    } else if (this->rotation == rotation180) {
+    } else if (this->layerRotation == rotation180) {
         hwx = (this->matrixWidth - 1) - x;
         hwy = (this->matrixHeight - 1) - y;
-    } else if (this->rotation == rotation90) {
+    } else if (this->layerRotation == rotation90) {
         hwx = (this->matrixWidth - 1) - y;
         hwy = x;
-    } else { /* if (rotation == rotation270)*/
+    } else { /* if (layerRotation == rotation270)*/
         hwx = y;
         hwy = (this->matrixHeight - 1) - x;
     }
