@@ -206,6 +206,7 @@ void checkEncodersState(void) {
             brightness = maxBrightness;
 
         matrix.setBrightness(brightness);
+        apamatrix.setBrightness(brightness);
 
         positionRight = newRight;
     }
