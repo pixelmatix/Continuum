@@ -69,9 +69,15 @@ SMARTMATRIX_ALLOCATE_SCROLLING_LAYER(scrollingLayer, kMatrixWidth, kMatrixHeight
 #define ENABLE_APA102_REFRESH   1
 
 #if (ENABLE_APA102_REFRESH == 1)
+const uint8_t apaStripLeftLength = 28;
+const uint8_t apaStripTopLength = 28;
+const uint8_t apaStripRightLength = 29;
+const uint8_t apaStripBottomLength = 33;
+const uint8_t apaStripLength = apaStripLeftLength + apaStripTopLength + apaStripRightLength + apaStripBottomLength;
+
 // adjust this to your APA matrix/strip - set kApaMatrixHeight to 1 for a strip
-const uint8_t kApaMatrixWidth = 16;
-const uint8_t kApaMatrixHeight = 16;
+const uint8_t kApaMatrixWidth = apaStripLength;
+const uint8_t kApaMatrixHeight = 1;
 const uint8_t kApaRefreshDepth = 36;        // known working: 36
 const uint8_t kApaDmaBufferRows = 1;        // known working: 1
 const uint8_t kApaPanelType = 0;            // not used for APA matrices as of now
@@ -79,7 +85,7 @@ const uint8_t kApaMatrixOptions = (SMARTMATRIX_OPTIONS_NONE);      // no options
 const uint8_t kApaBackgroundLayerOptions = (SM_BACKGROUND_OPTIONS_NONE);
 
 SMARTMATRIX_APA_ALLOCATE_BUFFERS(apamatrix, kApaMatrixWidth, kApaMatrixHeight, kApaRefreshDepth, kApaDmaBufferRows, kApaPanelType, kApaMatrixOptions);
-SMARTMATRIX_ALLOCATE_BACKGROUND_LAYER(apaBackgroundLayer, kApaMatrixWidth, kApaMatrixHeight, COLOR_DEPTH, kApaBackgroundLayerOptions);
+SMARTMATRIX_ALLOCATE_BACKGROUND_INTERPOLATION_LAYER(apaBackgroundLayer, kApaMatrixWidth, kApaMatrixHeight, COLOR_DEPTH, kApaBackgroundLayerOptions);
 #endif
 
 const SM_RGB COLOR_BLACK = {
@@ -286,7 +292,6 @@ void setup() {
 
     Serial.println("Starting AnimatedGIFs Sketch");
 
-
     // Initialize matrix
     matrix.addLayer(&backgroundLayer); 
 #if (ENABLE_SCROLLING == 1)
@@ -354,6 +359,75 @@ void setup() {
 }
 
 double frameDelayMultiplier = 7.0;
+const int minBrightness = 120;
+
+// function copied from Adafruit Adalight, but disabled for some reason (I took a > 6 month break between writing and attempting to document this code)
+rgb24 pixelToMinBrightness(rgb24 pixel) {
+#if 1
+    int sum = pixel.red + pixel.green + pixel.blue;
+    if(sum < minBrightness) {
+        if(sum == 0) { // To avoid divide-by-zero
+#if 0
+            int deficit = minBrightness / 3; // Spread equally to R,G,B
+            pixel.red += deficit;
+            pixel.green += deficit;
+            pixel.blue += deficit;
+#endif
+        } else {
+#if 0
+            int deficit = minBrightness - sum;
+            int s2      = sum * 2;
+            // Spread the "brightness deficit" back into R,G,B in proportion to
+            // their individual contribition to that deficit.  Rather than simply
+            // boosting all pixels at the low end, this allows deep (but saturated)
+            // colors to stay saturated...they don't "pink out."
+            pixel.red  += deficit * (sum - pixel.red ) / s2;
+            pixel.green += deficit * (sum - pixel.green) / s2;
+            pixel.blue += deficit * (sum - pixel.blue) / s2;
+#else
+            int factor = (minBrightness * 256)/sum;
+            pixel.red = (pixel.red * factor)/256;
+            pixel.green = (pixel.green * factor)/256;
+            pixel.blue = (pixel.blue * factor)/256;
+#endif
+        }
+    }
+    return pixel;
+#else
+    delayMicroseconds(10);
+#endif    
+}
+
+void fillApaBackgroundLayer(void) {
+    // go around display collecting color of pixels (TODO: averaging over area), and filling strip with values
+    for(int i=0; i<apaStripLeftLength; i++) {
+        // left side, from bottom to top
+        rgb24 pixel = backgroundLayer.readPixel(0, kMatrixHeight - 1 - (i*kMatrixHeight)/apaStripLeftLength);
+        pixel = pixelToMinBrightness(pixel);
+        apaBackgroundLayer.drawPixel(i, 0, pixel);
+    }
+
+    for(int i=0; i<apaStripTopLength; i++) {
+        // top side, from left to right
+        rgb24 pixel = backgroundLayer.readPixel((i*kMatrixWidth)/apaStripTopLength, 0);
+        pixel = pixelToMinBrightness(pixel);
+        apaBackgroundLayer.drawPixel(i + apaStripLeftLength, 0, pixel);
+    }
+
+    for(int i=0; i<apaStripRightLength; i++) {
+        // bottom side, from right to left
+        rgb24 pixel = backgroundLayer.readPixel(kMatrixHeight-1, 0 + (i*kMatrixHeight)/apaStripRightLength);
+        pixel = pixelToMinBrightness(pixel);
+        apaBackgroundLayer.drawPixel(i + apaStripLeftLength + apaStripTopLength, 0, pixel);
+    }
+
+    for(int i=0; i<apaStripBottomLength; i++) {
+        // bottom side, from right to left 
+        rgb24 pixel = backgroundLayer.readPixel(kMatrixWidth - 1 - (i*kMatrixWidth)/apaStripBottomLength, 0);
+        pixel = pixelToMinBrightness(pixel);
+        apaBackgroundLayer.drawPixel(i + apaStripLeftLength + apaStripTopLength + apaStripRightLength, 0, pixel);
+    }
+}
 bool frameDelayMultiplierUpdated = false;
 
 const int indexChangedFrameDelay_ms = 100;
@@ -416,6 +490,8 @@ void loop() {
         return;
     }
 
+    fillApaBackgroundLayer();
+
 #if (DEBUG_PRINT_FRAMESTATS == 1)
     int timeToDecode_ms = millis() - now;
 #endif
@@ -462,12 +538,14 @@ void loop() {
             frameDelayMultiplierUpdated = false;
 
             backgroundLayer.updateInterpolationPeriod(microsUntilChange);
+            apaBackgroundLayer.updateInterpolationPeriod(microsUntilChange);
         }
 
         // special case for the first frame - stop interpolating the two previous frames of the old GIF, so we can interpolate to the new GIF quickly
         if(firstFrame) {
             microsUntilChange = 0;
             backgroundLayer.updateInterpolationPeriod(0);
+            apaBackgroundLayer.updateInterpolationPeriod(0);
         }
 
         // If we don't delay at least a bit SmartMatrix Library starts dropping frames
@@ -483,8 +561,10 @@ void loop() {
     // swap buffers, begin interpolation between frame (n-1) and (n)
     if(!firstFrame) {
         backgroundLayer.swapBuffers(true, (nMinus1FrameDelay_ms * 1000) * frameDelayMultiplier);
+        apaBackgroundLayer.swapBuffers(true, (nMinus1FrameDelay_ms * 1000) * frameDelayMultiplier);
     } else {
         backgroundLayer.swapBuffers(true, 0);
+        apaBackgroundLayer.swapBuffers(true, 0);
     }
 
     // we're done with this frame loop, setup for the next loop where frame (n) becomes (n-1), (n-1) becomes (n-2)
